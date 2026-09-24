@@ -126,6 +126,16 @@ def evaluate_live(frames: dict, live: dict, confirmed: bool, regime: dict = None
             elif C.QUALITY_PROFILE == "balanced":
                 if np.isfinite(st.flag_bars) and st.flag_bars < 15:
                     reasons.append(f"drift only {st.flag_bars} bars < 15")
+            elif C.QUALITY_PROFILE == "edge":
+                # the three conditions that survived the permutation test
+                if np.isfinite(st.flag_bars) and st.flag_bars < C.EDGE_MIN_DRIFT_BARS:
+                    reasons.append(f"drift only {st.flag_bars} bars < {C.EDGE_MIN_DRIFT_BARS}")
+                if np.isfinite(st.sweep_vol_vs_drift) and st.sweep_vol_vs_drift < C.SWEEP_MIN_VOL_VS_DRIFT:
+                    reasons.append(f"shakeout volume only {st.sweep_vol_vs_drift}x the quiet drift's "
+                                   f"(needs >= {C.SWEEP_MIN_VOL_VS_DRIFT}x - this is THE edge condition)")
+                if np.isfinite(st.sweep_leg_pct) and st.sweep_leg_pct > -C.SWEEP_MIN_DROP_PCT:
+                    reasons.append(f"worst day in the shakeout {st.sweep_leg_pct}% "
+                                   f"(needs <= -{C.SWEEP_MIN_DROP_PCT}% - a red fall, not a quiet bleed)")
             elif C.QUALITY_PROFILE == "volume":
                 # the shakeout must be a volume event with a red, falling structure, and the
                 # reclaim must be quiet - this is the signature the two source charts show

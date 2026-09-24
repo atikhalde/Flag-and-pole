@@ -51,12 +51,7 @@
   "median_flag_bars": 18.0,
   "horizon_bars": 30
  },
- "_baseline": {
-  "median_ret": 0.0102,
-  "avg_ret": 0.0313,
-  "win_rate": 0.5336,
-  "samples": 2381179
- },
+ "_baseline": {},
  "_evidence": {
   "by_year": [
    {
@@ -393,7 +388,7 @@
     }
    },
    {
-    "label": "balanced - quiet reclaim, drift >= 15 bars",
+    "label": "balanced - quiet reclaim, drift >= 15",
     "trades": 688,
     "win": 0.343,
     "avgR": 0.324,
@@ -424,7 +419,7 @@
     }
    },
    {
-    "label": "strict - quiet, drift >= 25, shakeout >= 8%",
+    "label": "strict - quiet, drift >= 25, sweep >= 8%",
     "trades": 149,
     "win": 0.416,
     "avgR": 0.511,
@@ -455,7 +450,7 @@
     }
    },
    {
-    "label": "volume - the shakeout must be a VOLUME event with a red fall (the shipped default)",
+    "label": "volume - shakeout volume + red fall",
     "trades": 178,
     "win": 0.399,
     "avgR": 0.538,
@@ -483,6 +478,37 @@
      "avg_ret": 0.0556,
      "target": 0.343,
      "stopped": 0.533
+    }
+   },
+   {
+    "label": "edge - drift >= 15, shakeout vol >= 3x drift, red fall (DEFAULT)",
+    "trades": 255,
+    "win": 0.427,
+    "avgR": 0.489,
+    "medR": -1.0,
+    "med_ret": 0.0397,
+    "avg_ret": 0.0588,
+    "target": 0.325,
+    "stopped": 0.549,
+    "train": {
+     "trades": 106,
+     "win": 0.377,
+     "avgR": 0.418,
+     "medR": -1.0,
+     "med_ret": 0.021,
+     "avg_ret": 0.0405,
+     "target": 0.274,
+     "stopped": 0.604
+    },
+    "test": {
+     "trades": 149,
+     "win": 0.463,
+     "avgR": 0.54,
+     "medR": -1.0,
+     "med_ret": 0.056,
+     "avg_ret": 0.0718,
+     "target": 0.362,
+     "stopped": 0.51
     }
    }
   ],
@@ -528,7 +554,7 @@
   "universe": "(from csv)",
   "start": "2016-01-01",
   "filters": "price>\u20b9100, mcap\u2265\u20b91000cr",
-  "generated": "2026-09-24 20:46:12",
+  "generated": "2026-09-24 21:02:27",
   "horizon": 30,
   "rule": "pole(\u22659.8% locked, 3x vol) \u2192 flag(\u226550% give-back, base intact) \u2192 sweep of flag low \u2192 close back above the rail; stop sweep-low \u2212 0.5ATR, target pole high, 60-bar time stop",
   "watchlist": [
