@@ -117,7 +117,7 @@ def status_card(s: dict) -> str:
 
 def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None,
            fresh: int = None, newly_closed: list[dict] = None,
-           watch: list[dict] = None) -> str:
+           watch: list[dict] = None, data_through: str = None) -> str:
     """Post-close digest: open positions, fresh triggers and the names filtered out today."""
     gated = gated or []
     newly_closed = newly_closed or []
@@ -129,6 +129,10 @@ def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None
                     f"({n_pos} position(s) already running)")
     else:
         head.append(f"{len(items)} live setup(s)")
+    # the bar the scan is computed on: if the vendor lags, you need to know that when you read
+    # a signal, not afterwards
+    if data_through:
+        head.append(f"<i>daily bars through {data_through}</i>")
     head.append("")
     out = ["\n".join(head)]
     if not items:
