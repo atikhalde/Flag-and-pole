@@ -56,6 +56,9 @@ class Setup:
     entry_gt_prior_high: bool = False   # close > the previous bar's high (it actually reclaimed ground)
     entry_gt_flush_high: bool = False   # close > the high of the bar that made the flush low
     entry_vs_rail_pct: float = np.nan   # entry close vs the drift floor
+    rebased: int = 0                    # how many earlier triggers this entry replaced
+    rebased_from: str = ""              # their dates
+    R_voided: float = 0.0               # what those voided entries cost, booked at the void
     # outcome fields (backtest only)
     outcome: str = ""
     R: float = np.nan
@@ -121,12 +124,42 @@ def find_setups(raw: pd.DataFrame, symbol: str, last_only: bool = True,
             continue
         last_ok_i = i
         setups.append(s)
+        if not last_only:
+            setups.extend(getattr(s, "voided_setups", []) or [])   # voids are real closed trades
         if last_only:
             break
     # for the back-test, only "completed" setups are tradeable
     if not last_only:
-        setups = [s for s in setups if s.status in ("BUY", "DONE", "DEAD", "SWEPT")]
+        setups = [s for s in setups if s.status in ("BUY", "DONE", "DEAD", "SWEPT", "REBASING")]
     return setups
+
+
+def _voided_as_setup(g: pd.DataFrame, s: "Setup", a: int, b: int, stop_a: float, R_a: float) -> "Setup":
+    """A trigger that was voided is a trade you would have taken and closed - report it as one."""
+    v = Setup(symbol=s.symbol, pole_date=s.pole_date, pole_low=s.pole_low, pole_high=s.pole_high,
+              pole_high_date=s.pole_high_date, pole_gain=s.pole_gain, flag_bars=s.flag_bars,
+              flag_end_date=s.flag_end_date, rail=s.rail, rail_slope_pct=s.rail_slope_pct)
+    v.sweep_idx, v.sweep_date, v.sweep_low = s.sweep_idx, s.sweep_date, s.sweep_low
+    v.sweep_below_pct, v.sweep_bars, v.sweep_red = s.sweep_below_pct, s.sweep_bars, s.sweep_red
+    v.sweep_red_frac, v.sweep_vol_x20, v.sweep_vol_vs_drift = s.sweep_red_frac, s.sweep_vol_x20, s.sweep_vol_vs_drift
+    v.sweep_close_pos, v.sweep_leg_pct, v.turnover_cr = s.sweep_close_pos, s.sweep_leg_pct, s.turnover_cr
+    v.entry_idx, v.entry_date = int(a), str(g.index[a].date())
+    v.entry, v.stop, v.target = round(float(g["close"].iloc[a]), 2), round(float(stop_a), 2), s.pole_high
+    v.risk_pct = round((v.entry - v.stop) / v.entry * 100, 2) if v.entry > v.stop else np.nan
+    v.reward_R = round((v.target - v.entry) / (v.entry - v.stop), 2) if v.entry > v.stop else np.nan
+    v.atr = round(float(g["atr"].iloc[a]), 2) if np.isfinite(g["atr"].iloc[a]) else np.nan
+    v.vol_x20 = round(float(g["volume"].iloc[a]) / float(g["v20"].iloc[a]), 2) if float(g["v20"].iloc[a]) > 0 else np.nan
+    v.status, v.outcome, v.R = "DONE", "voided", round(float(R_a), 2)
+    v.bars_held = int(b - a)
+    v.exit_date_void = str(g.index[b].date())
+    h = min(a + C.MAX_HOLD_BARS, len(g) - 1)
+    fwd = g.iloc[a + 1:h + 1]
+    if len(fwd):
+        v.mfe = round(float(fwd["high"].max()) / v.entry - 1, 4)
+        v.mae = round(float(fwd["low"].min()) / v.entry - 1, 4)
+    j = min(a + C.RET_HORIZON, len(g) - 1)
+    v.ret_horizon = round(float(g["close"].iloc[j]) / v.entry - 1, 4)
+    return v
 
 
 def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup | None:
@@ -192,27 +225,77 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         return s if last_only else None
 
     # walk forward to the shakeout's low (the running minimum until the entry)
+    def _is_trigger(k):
+        """the candle we are allowed to buy: a bullish close, in the top of its own range
+        (or, in rail_reclaim mode, a close back above the drift floor and the prior 5-bar high)"""
+        if C.TRIGGER_MODE == "first_bullish":
+            c, o = float(g["close"].iloc[k]), float(g["open"].iloc[k])
+            rng = float(g["high"].iloc[k]) - float(g["low"].iloc[k])
+            pos = (c - float(g["low"].iloc[k])) / rng if rng > 0 else 0
+            return c > o and pos >= (1 - C.BULLISH_CLOSE_POS)
+        prior5 = float(g["high"].iloc[max(0, k - 5):k].max())
+        return float(g["close"].iloc[k]) > max(rail, prior5)
+
     entry_idx = None
     sh_low, sh_low_idx = float(g["low"].iloc[sweep]), sweep
     for k in range(sweep + 1, min(sweep + 1 + C.SWEEP_MAX_BARS, n)):
         if float(g["low"].iloc[k]) < sh_low:
             sh_low, sh_low_idx = float(g["low"].iloc[k]), k
-        # the reclaim: a CLOSE back above the drift floor AND above the prior 5-bar high
-        if C.TRIGGER_MODE == "first_bullish":
-            c, o = float(g["close"].iloc[k]), float(g["open"].iloc[k])
-            rng = float(g["high"].iloc[k]) - float(g["low"].iloc[k])
-            pos = (c - float(g["low"].iloc[k])) / rng if rng > 0 else 0
-            ok = c > o and pos >= (1 - C.BULLISH_CLOSE_POS)
-        else:
-            prior5 = float(g["high"].iloc[max(0, k - 5):k].max())
-            ok = float(g["close"].iloc[k]) > max(rail, prior5)
-        if ok:
+        if _is_trigger(k):
             entry_idx = k
+            break
+
+    # ---- RE-BASE: a trigger that is later undercut and closed below was a bounce inside the
+    # shakeout, not the end of it.  Void it, move the shakeout low (and therefore the stop)
+    # down to the new low, and take the next bullish candle.  Repeat.
+    voided, voided_R = [], 0.0
+    while C.REBASE_ON_NEW_LOW and entry_idx is not None:
+        inval = None
+        standing = sh_low          # the shakeout low THIS entry is anchored to - it must not move
+        for k in range(entry_idx + 1, min(entry_idx + 1 + C.SWEEP_MAX_BARS, n)):
+            if float(g["close"].iloc[k]) < standing:
+                inval = k
+                break
+        if inval is None:
+            break
+        if inval is None:
+            break
+        nxt = None
+        for k in range(inval + 1, min(inval + 1 + C.SWEEP_MAX_BARS, n)):
+            if float(g["low"].iloc[k]) < sh_low:
+                sh_low, sh_low_idx = float(g["low"].iloc[k]), k
+            if _is_trigger(k):
+                nxt = k
+                break
+        _seg = g["low"].iloc[entry_idx:inval + 1]
+        if float(_seg.min()) < sh_low:
+            sh_low, sh_low_idx = float(_seg.min()), int(entry_idx + int(np.nanargmin(_seg.values)))
+        # what the voided entry would have cost you had you taken it (it did not fill a target:
+        # it was closed at the invalidation close, so this is a real loss, not a free do-over)
+        _low_at = float(g["low"].iloc[entry_idx:inval + 1].min())
+        _atr = float(g["atr"].iloc[entry_idx]) if np.isfinite(g["atr"].iloc[entry_idx]) else 0.0
+        _stop = min(_low_at, sh_low) - C.ATR_BUF * _atr
+        _risk = float(g["close"].iloc[entry_idx]) - _stop
+        _Rv = ((float(g["close"].iloc[inval]) - float(g["close"].iloc[entry_idx])) / _risk) if _risk > 0 else np.nan
+        if np.isfinite(_Rv):
+            voided_R += _Rv
+        voided.append((int(entry_idx), int(inval), float(_stop), float(_Rv)))
+        entry_idx = nxt
+        if entry_idx is None:
             break
     if sh_low < pole_low * C.BASE_INTACT_TOL:              # the whole base is gone
         s.status = "DEAD"
         s.sweep_idx, s.sweep_date, s.sweep_low = sweep, str(g.index[sweep].date()), round(sh_low, 2)
         s.sweep_below_pct = round((sh_low / rail - 1) * 100, 2)
+        s.rebased = int(len(voided))
+        s.rebased_from = ",".join(str(g.index[a].date()) for a, *_ in voided)
+        s.R_voided = round(voided_R, 2)
+        if voided and not last_only:
+            # the base is dead, but the entries that were voided on the way down are trades
+            # that happened and were closed.  Dropping them is how this rule flatters itself.
+            s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+                               if np.isfinite(Rv)]
+            return s
         return s if last_only else None
     s.sweep_idx, s.sweep_date, s.sweep_low = sweep, str(g.index[sh_low_idx].date()), round(sh_low, 2)
     s.sweep_below_pct = round((sh_low / rail - 1) * 100, 2)
@@ -234,8 +317,18 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         rng = float(bar["high"]) - float(bar["low"])
         s.sweep_close_pos = round((float(bar["close"]) - float(bar["low"])) / rng, 2) if rng > 0 else np.nan
         s.sweep_leg_pct = round(float(leg["ret"].min()) * 100, 2) if np.isfinite(leg["ret"].min()) else np.nan
+    s.rebased = int(len(voided))
+    s.rebased_from = ",".join(str(g.index[a].date()) for a, *_ in voided)
+    s.R_voided = round(voided_R, 2)
     if entry_idx is None:
-        s.status = "SWEPT"                                 # shakeout done, waiting for the reclaim
+        s.status = "REBASING" if voided else "SWEPT"       # shakeout still running / waiting for a candle
+        if voided and not last_only:
+            # no new trigger has appeared yet, but the voided entries are still trades that
+            # happened and were closed.  They must be counted - dropping them is how a
+            # "wait for a cleaner entry" rule flatters itself.
+            s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+                               if np.isfinite(Rv)]
+            return s
         return s if last_only else None
 
     entry = float(g["close"].iloc[entry_idx])
@@ -278,6 +371,9 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         s.outcome_struct = _so
         s.R_struct = round(float(_sR), 2) if np.isfinite(_sR) else np.nan
         s.bars_held_struct = int(_sk - entry_idx)
+    if voided and not last_only:
+        s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+                           if np.isfinite(Rv)]
         h = min(entry_idx + C.MAX_HOLD_BARS, n - 1)
         fwd = g.iloc[entry_idx + 1:h + 1]
         if len(fwd):

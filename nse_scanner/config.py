@@ -38,6 +38,17 @@ MAX_SETUP_BARS     = int(os.getenv("MAX_SETUP_BARS", 90))       # whole pole->no
 ATR_BUF            = float(os.getenv("ATR_BUF", 0.5))           # stop = sweep low − ATR_BUF × ATR
 MAX_HOLD_BARS      = int(os.getenv("MAX_HOLD_BARS", 60))
 RET_HORIZON        = int(os.getenv("RET_HORIZON", 30))          # headline "return after 30 days"
+# ── when the "first bullish candle" is a bounce inside a still-running shakeout ────────────
+# LAMBODHARA, 2026-09-18: the scanner fired on the first bullish candle after the rail break.
+# Four bars later the stock made a LOWER low (115.57 under 116.60) AND closed below the earlier
+# flush.  So 09-18 was a bounce inside the shakeout, not the end of it; the first bullish candle
+# after the real shakeout low was 09-23 (close 119.93 - 0.2% BELOW the early entry, so waiting
+# cost nothing and anchored the stop to the real low instead of an intermediate one).
+# With this on, an entry that is later undercut by a close below the shakeout low is VOIDED,
+# the shakeout low and the stop re-base to the new low, and the search restarts for the next
+# bullish candle.  That is the chart's own logic: the shakeout ends when it stops making lows.
+REBASE_ON_NEW_LOW  = os.getenv("REBASE_ON_NEW_LOW", "1") not in ("0", "false", "no", "off")
+
 MIN_REWARD_R       = float(os.getenv("MIN_REWARD_R", 0.5))      # live alerts only: skip if reward/pole-target < this
 
 # ── the structural exit: "the flush failed, so it was never a shakeout" ───────────────────
