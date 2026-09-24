@@ -209,11 +209,10 @@ def evidence_tables(df: pd.DataFrame) -> dict:
     _edge = d[(d.sweep_vol_vs_drift >= C.SWEEP_MIN_VOL_VS_DRIFT)
               & (d.sweep_leg_pct <= -C.SWEEP_MIN_DROP_PCT)
               & (d.flag_bars >= C.EDGE_MIN_DRIFT_BARS)
-              # the setup's time budget.  set from the two source charts (NIACL 39/5, LAMBODHARA
-              # 22/10) and stamped on every row when the entry fired - including the voided ones,
-              # which carry their own frozen values.  Falls back to the bar indices for old CSVs.
-              & (pd.to_numeric(_dur_col(d, "setup_bars", d.entry_idx - d.pole_idx + 1),
-                               errors="coerce").between(0, C.EDGE_MAX_SETUP_BARS))
+              # the formation's time budget: breakout -> shakeout inside the window, and a quick
+              # shakeout.  Stamped on every row when the entry fired, voided entries included.
+              & (pd.to_numeric(_dur_col(d, "rail_bars", d.sweep_idx - d.pole_idx + 1),
+                               errors="coerce").between(0, C.EDGE_MAX_RAIL_BARS))
               & (pd.to_numeric(_dur_col(d, "flush_bars", d.entry_idx - d.sweep_idx + 1),
                                errors="coerce").between(0, C.EDGE_MAX_FLUSH_BARS))]
     out["profiles"] = [dict(label="off - every signal", **_profile(d)),

@@ -92,7 +92,7 @@ def main():
         else:
             print(f"       (shipped mode {C.DEFAULT_TRIGGER_MODE}: entry {str(_d.entry_date)[:10]}, "
                   f"{_d.setup_bars} bars from ignition, {_d.flush_bars} bars below the rail)")
-            for name, got, cap in (("bars ignition->entry", _d.setup_bars, C.EDGE_MAX_SETUP_BARS),
+            for name, got, cap in (("bars breakout->shakeout", _d.rail_bars, C.EDGE_MAX_RAIL_BARS),
                                    ("bars below the rail", _d.flush_bars, C.EDGE_MAX_FLUSH_BARS)):
                 hit_ok = 0 <= got <= cap
                 good &= hit_ok

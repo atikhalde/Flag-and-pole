@@ -153,6 +153,12 @@ def evaluate_live(frames: dict, live: dict, confirmed: bool, regime: dict = None
                 if st.flush_bars >= 0 and st.flush_bars > C.EDGE_MAX_FLUSH_BARS:
                     reasons.append(f"spent {st.flush_bars} bars below the rail before reclaiming it "
                                    f"(> {C.EDGE_MAX_FLUSH_BARS} - NIACL took 3, LAMBODHARA 6)")
+                # ---- the formation window: breakout -> shakeout in one compact move.  A rail that
+                # runs for months is a downtrend wearing a flag's clothes, which is why this exists.
+                if st.rail_bars >= 0 and st.rail_bars > C.EDGE_MAX_RAIL_BARS:
+                    reasons.append(f"{st.rail_bars} bars from the breakout to the shakeout "
+                                   f"(> {C.EDGE_MAX_RAIL_BARS} - a long rail is a downtrend, not a "
+                                   f"shakeout; NIACL took 37, LAMBODHARA 17)")
             elif C.QUALITY_PROFILE == "volume":
                 # the shakeout must be a volume event with a red, falling structure, and the
                 # reclaim must be quiet - this is the signature the two source charts show
@@ -250,6 +256,23 @@ def run(args) -> int:
     buys = [r for r in results if r["status"] == "BUY" and not r.get("skip_reason")
             and not r.get("watchlist_bypass")]
     carried = [r for r in results if r.get("pos_state")]
+    # A carried position was taken under whatever rule existed when it fired.  The board is re-checked
+    # against the rule that ships NOW: a setup whose formation is outside the window was never this
+    # pattern and must not keep being presented as a valid in-trade.  It is not hidden - it moves to
+    # its own labelled list with the reason printed.
+    def _formation_broken(r):
+        rb, fb = r.get("rail_bars", -1), r.get("flush_bars", -1)
+        why = []
+        if rb is not None and rb >= 0 and rb > C.EDGE_MAX_RAIL_BARS:
+            why.append(f"{rb} bars from the breakout to the shakeout (> {C.EDGE_MAX_RAIL_BARS})")
+        if fb is not None and fb >= 0 and fb > C.EDGE_MAX_FLUSH_BARS:
+            why.append(f"{fb} bars under the rail (> {C.EDGE_MAX_FLUSH_BARS})")
+        return "; ".join(why)
+    invalid = [r for r in carried if _formation_broken(r)]
+    for r in invalid:
+        r["not_a_setup"] = _formation_broken(r)
+        r["status"] = "NOT THE PATTERN"
+    carried = [r for r in carried if r not in invalid]
     in_trade = [r for r in carried if r["pos_state"] == POS.OPEN]
     closed = [r for r in carried if r["pos_state"] != POS.OPEN]
     # REBASING belongs here: its earlier trigger was voided (the flush failed) and it is
@@ -280,13 +303,16 @@ def run(args) -> int:
     print(f"[result] {len(buys)} fresh BUY signal(s) | {len(in_trade)} open | "
           f"{len(closed)} closed since entry "
           f"({stats['stopped']} stopped, {stats['target']} target, {stats['expired']} timed out) | "
-          f"{len(gated)} blocked by quality gates | {len(waiting)} waiting")
+          f"{len(gated)} blocked by quality gates | {len(waiting)} waiting | "
+          f"{len(invalid)} carried name(s) re-checked and found not to be this pattern")
     print(f"[book]   booked {stats['booked_R']:+.1f}R on closed trades · "
           f"open positions marked {stats['open_R']:+.1f}R")
     for c in newly_closed[:12]:
         print(f"    x {c['symbol']}: {c['pos_reason']}")
     for g in gated[:10]:
         print(f"    - {g['symbol']}: {g['skip_reason']}")
+    for r in invalid[:12]:
+        print(f"    ! {r['symbol']}: {r['not_a_setup']} - a downtrend, not a shakeout")
 
     sent = 0
     for b in buys:
@@ -321,7 +347,7 @@ def run(args) -> int:
             items.append(r)
         items.sort(key=lambda x: {"REBASING": 0, "SWEPT": 0, "BUY": 1, "IN TRADE": 2,
                                   "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
-        text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys),
+        text = TG.digest(items, "post-close digest", gated=gated + invalid, fresh=len(buys),
                          newly_closed=newly_closed, watch=watch, data_through=data_through)
         print(f"[digest] {len(items)} setup(s) on the board, {len(watch)} watchlist, {len(gated)} filtered out")
         if not args.no_telegram:
@@ -336,12 +362,13 @@ def run(args) -> int:
 
     _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
                  closed=closed, newly_closed=newly_closed, stats=stats, watch=watch,
-                 data_through=data_through)
+                 data_through=data_through, invalid=invalid)
     return 0
 
 
 def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
-                 closed=None, newly_closed=None, stats=None, watch=None, data_through="?"):
+                 closed=None, newly_closed=None, stats=None, watch=None, data_through="?",
+                 invalid=None):
     """Write the job summary shown on the Actions run page (GITHUB_STEP_SUMMARY)."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -355,6 +382,12 @@ def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, di
     newly_closed = newly_closed or []
     stats = stats or {}
     L.append(f"| fresh BUY | open positions | closed since entry | filtered out | waiting | alerts sent | digest |")
+    if invalid:
+        L.append("")
+        L.append(f"**{len(invalid)} carried name(s) re-checked and found not to be this pattern** "
+                 f"(a long rail is a downtrend, not a shakeout) - shown here, not dropped:")
+        for r in invalid:
+            L.append(f"- `{r['symbol']}` {r.get('entry_date','')} {r.get('not_a_setup','')}")
     L.append(f"|---|---|---|---|---|---|---|")
     L.append(f"| **{len(buys)}** | {len(in_trade)} | {len(closed)} | {len(gated)} | {len(waiting)} | {sent} | "
              f"{'sent' if digest_sent else 'not sent'} |")

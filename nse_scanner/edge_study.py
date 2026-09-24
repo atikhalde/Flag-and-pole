@@ -41,16 +41,16 @@ def gate_masks(d: pd.DataFrame) -> dict[str, pd.Series]:
         "leg more than half red":     d.sweep_red_frac >= C.SWEEP_MIN_RED_FRAC,
         # the setup's time budget.  Built from the bar indices so it means the same thing on both
         # bases; a voided entry carries its own frozen values (see pattern._voided_as_setup).
-        "setup <= 40 bars":           _dur(d, "setup_bars", d.entry_idx - d.pole_idx + 1,
-                                           C.EDGE_MAX_SETUP_BARS),
+        "rail <= 45 bars":            _dur(d, "rail_bars", d.sweep_idx - d.pole_idx + 1,
+                                           C.EDGE_MAX_RAIL_BARS),
         "flush <= 6 bars":            _dur(d, "flush_bars", d.entry_idx - d.sweep_idx + 1,
                                            C.EDGE_MAX_FLUSH_BARS),
     }
 
 
-def gm2(d: pd.DataFrame, setup_cap: int, flush_cap: int) -> pd.Series:
+def gm2(d: pd.DataFrame, rail_cap: int, flush_cap: int) -> pd.Series:
     """The duration budget at arbitrary caps (used to show the neighbours of the shipped choice)."""
-    return _dur(d, "setup_bars", d.entry_idx - d.pole_idx + 1, setup_cap) & \
+    return _dur(d, "rail_bars", d.sweep_idx - d.pole_idx + 1, rail_cap) & \
            _dur(d, "flush_bars", d.entry_idx - d.sweep_idx + 1, flush_cap)
 
 
@@ -320,7 +320,7 @@ CANDIDATES = {
     "all signals": [],
     "6-condition (previous default)": VOLUME_GATE,
     "edge (5) - SHIPPED": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg",
-                           "setup <= 40 bars", "flush <= 6 bars"],
+                           "rail <= 45 bars", "flush <= 6 bars"],
     "edge (3) - no time budget": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg"],
     "edge (2)": ["shakeout vol >= 3x drift", "red fall >= 4% in leg"],
     "edge (1) - volume alone": ["shakeout vol >= 3x drift"],
@@ -337,7 +337,7 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
     """
     gm = gate_masks(c)
     base = gm["drift >= 15 bars"] & gm["shakeout vol >= 3x drift"] & gm["red fall >= 4% in leg"]
-    cap = gm["setup <= 40 bars"] & gm["flush <= 6 bars"]
+    cap = gm["rail <= 45 bars"] & gm["flush <= 6 bars"]
     full = base & cap
     B, F = c[base], c[full]
     rng = np.random.default_rng(23)
@@ -370,7 +370,7 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
     # neighbours of the chosen caps, so the choice is visible rather than asserted.  A looser budget
     # buys more signals at a lower average - the user can move the caps with two env vars.
     alts = []
-    for su, fl in ((50, 8), (60, 12), (30, 4)):
+    for su, fl in ((55, 8), (65, 12), (35, 4)):
         m = base & gm2(c, su, fl)
         x = c[m]
         tr, te = x[x.entry_date.astype(str) < SPLIT], x[x.entry_date.astype(str) >= SPLIT]
@@ -382,12 +382,12 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
                          test=round(float(te.R.mean()), 3) if len(te) else None))
     return dict(
         alternatives=alts,
-        cap_setup_bars=C.EDGE_MAX_SETUP_BARS, cap_flush_bars=C.EDGE_MAX_FLUSH_BARS,
+        cap_rail_bars=C.EDGE_MAX_RAIL_BARS, cap_flush_bars=C.EDGE_MAX_FLUSH_BARS,
         base=_split(B), capped=_split(F), removed=_split(removed),
         p_within_profile=_p(B, cap[base]),
-        chart_bars=dict(niacl=dict(setup=39, flush=3), lambodhara=dict(setup=22, flush=6)),
-        note="the caps are the two charts' own geometry (NIACL 39 bars / 3 under the rail, "
-             "LAMBODHARA 22/6), rounded up; "
+        chart_bars=dict(niacl=dict(rail=37, flush=3), lambodhara=dict(rail=18, flush=6)),
+        note="the window is the user's rule and the two charts sit well inside it (NIACL 37 bars "
+             "from breakout to shakeout / LAMBODHARA 18, against a limit of 45); "
              "tightening them fails nse_scanner.tests.test_exemplars")
 
 
@@ -600,14 +600,14 @@ def build(d: pd.DataFrame, args, classic: pd.DataFrame = None) -> dict:
     tb = rep.get("time_budget") or {}
     if tb:
         b, f, rm = tb["base"], tb["capped"], tb["removed"]
-        print(f"\n  the setup's time budget (cap {tb['cap_setup_bars']} bars ignition->entry, "
-              f"{tb['cap_flush_bars']} bars below the rail):")
+        print(f"\n  the formation's time budget (breakout -> shakeout within {tb['cap_rail_bars']} bars, "
+              f"and the shakeout itself within {tb['cap_flush_bars']} bars below the rail):")
         print(f"    edge profile without a budget : n={b['n']:4d}  avgR {b['avgR']:+.3f}  "
               f"train {b['train']:+.3f}  test {b['test']:+.3f}")
         print(f"    shipped (edge + time budget)  : n={f['n']:4d}  avgR {f['avgR']:+.3f}  "
               f"train {f['train']:+.3f}  test {f['test']:+.3f}  hit {f['win']*100:.0f}%")
-        print(f"    what the budget removes       : n={rm['n']:4d}  avgR {rm['avgR']:+.3f}  "
-              f"win {rm['win']*100:.0f}%   (the slow ones - this is the profit of waiting)")
+        print(f"    what the window removes       : n={rm['n']:4d}  avgR {rm['avgR']:+.3f}  "
+              f"win {rm['win']*100:.0f}%   (long rails - downtrends wearing a flag's clothes)")
         print(f"    permutation inside the profile: p={tb['p_within_profile']}")
         for a in tb.get("alternatives") or []:
             print(f"      alt {a['caps']:26s} n={a['n']:4d} ({a['per_year']}/yr)  avgR {a['avgR']:+.3f}  "

@@ -453,43 +453,44 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
             "below. Those three conditions are the only ones that survived the permutation test in "
             "section 8; the budget is added because both charts complete their setup inside it.", SMALL))
 
-        # ---------- the setup's time budget: the answer to "how long may the shakeout take?"
+        # ---------- the formation window: "from breakout to shakeout, all within one period"
         tb = es.get("time_budget") or {}
         if tb:
             b, f, rm = tb.get("base") or {}, tb.get("capped") or {}, tb.get("removed") or {}
             ch = tb.get("chart_bars") or {}
-            _ch = ch.get("niacl") or {}; _cl = ch.get("lambodhara") or {}
-            _nf = int(tb.get("cap_flush_bars") or 10); _ns = int(tb.get("cap_setup_bars") or 40)
-            _n_fl = int(_ch.get("flush") or 5); _n_st = int(_ch.get("setup") or _ns)
-            _l_fl = int(_cl.get("flush") or 10); _l_st = int(_cl.get("setup") or _ns)
+            _ch, _cl = ch.get("niacl") or {}, ch.get("lambodhara") or {}
+            _rail = int(tb.get("cap_rail_bars") or 45); _fl = int(tb.get("cap_flush_bars") or 6)
+            _nr, _nf = int(_ch.get("rail") or 37), int(_ch.get("flush") or 3)
+            _lr, _lf = int(_cl.get("rail") or 18), int(_cl.get("flush") or 6)
             _fmt = lambda v, n: f"<b>{v:+.2f}R</b> (n={n})" if v is not None else "-"
-            F.append(Paragraph("6b · How long the setup may take — the time budget", H3))
+            F.append(Paragraph("6b · How long the whole formation may take", H3))
             F.append(Paragraph(
-                f"<b>{tb.get('cap_setup_bars')} bars from the ignition to the entry, and no more than "
-                f"{tb.get('cap_flush_bars')} of them spent below the drift's floor.</b> Those two numbers are "
-                f"not fitted: they are the two source charts' own geometry. NIACL breaks its rail and reclaims "
-                f"it {_n_fl} bars later, {_n_st - 1} bars after the 2026-04-10 ignition; LAMBODHARA takes "
-                f"{_l_fl} and {_l_st - 1}. The caps are those numbers rounded up - "
-                f"{tb.get('cap_setup_bars')} and {tb.get('cap_flush_bars')} - and "
-                f"<font face='Courier'>nse_scanner.tests.test_exemplars</font> fails if either cap is ever "
+                f"<b>A long rail is a downtrend, not a shakeout.</b> The entire structure - the breakout, "
+                f"the sloping rail the price drifts along, and the shakeout that flushes it - has to happen "
+                f"in one compact window. The limit is <b>{_rail} bars from the breakout to the shakeout</b>, "
+                f"plus <b>{_fl} bars</b> in the shakeout itself, so no entry can come more than "
+                f"{_rail + _fl - 1} bars after the breakout. Both source charts sit well inside it: "
+                f"NIACL breaks its rail <b>{_nr} bars</b> after the 2026-04-10 breakout and reclaims it "
+                f"{_nf} bars later; LAMBODHARA takes <b>{_lr}</b> and {_lf}. "
+                f"<font face='Courier'>nse_scanner.tests.test_exemplars</font> fails if either limit is ever "
                 f"tightened past the chart it came from.", SMALL))
             F.append(Paragraph(
-                "<b>Why this matters, and why it is not simply a matter of shorter being better.</b> On its own a duration "
-                f"cap does <i>not</i> pay - in the raw book the slowest setups are among the best trades, "
-                f"because a long consolidation that finally flushes is a real pattern too. It pays as a "
-                f"<i>quality filter on top of the edge profile</i>: of the trades that profile already accepts, "
-                f"the ones that took longer than the budget are the false ones. Measured on the classic book: "
-                f"{_fmt(b.get('avgR'), b.get('n'))} becomes {_fmt(f.get('avgR'), f.get('n'))} with the budget "
-                f"applied ({f.get('train') if f.get('train') is not None else float('nan'):+.2f}R before 2022, "
-                f"{f.get('test') if f.get('test') is not None else float('nan'):+.2f}R after, hit rate "
-                f"{100*(f.get('win') or 0):.0f}%). "
-                f"<b>Of them, the {rm.get('n')} it removes still earn "
-                f"{(rm.get('avgR') if rm.get('avgR') is not None else float('nan')):+.2f}R, but on a "
-                f"{100*(rm.get('win') or 0):.0f}% win rate</b> - they are the weaker copies of the pattern, "
-                f"a third of the expectancy for the same risk, and they are what was filling the scanner. "
-                f"Shuffling the two durations inside the profile leaves a subset this good "
-                f"{(tb.get('p_within_profile') or 0)*100:.1f}% of the time, so the split is real but modest: "
-                f"read it as <i>the fast ones are better</i>, not as a law of nature.", SMALL))
+                "<b>Why the limit is needed, and what it was worth.</b> Every position the scanner is "
+                "carrying is re-checked against this window on every run. Before it existed, carried "
+                "positions bypassed the filters, and the board filled up with rails of 50-65 bars - "
+                "downtrends wearing a flag's clothes. Measured on the classic book, inside the edge "
+                "profile: "
+                f"{_fmt(b.get('avgR'), b.get('n'))} becomes {_fmt(f.get('avgR'), f.get('n'))} with the "
+                f"window applied (before 2022 "
+                f"{(f.get('train') if f.get('train') is not None else float('nan')):+.2f}R, after "
+                f"{(f.get('test') if f.get('test') is not None else float('nan')):+.2f}R, hit rate "
+                f"{100*(f.get('win') or 0):.0f}%). The "
+                f"<b>{(rm.get('n') or 0)} signals it removes still earn "
+                f"{(rm.get('avgR') if rm.get('avgR') is not None else float('nan')):+.2f}R on a "
+                f"{100*(rm.get('win') or 0):.0f}% win rate</b> - presentable numbers, but they are the "
+                f"slow copies of the pattern, and they are what was filling the board. On its own a "
+                f"duration cap does <i>not</i> pay - in the raw book the slowest setups are among the best "
+                f"trades, which is why this is a limit on the <i>formation</i> and not a bet on speed.", SMALL))
             _alts = tb.get("alternatives") or []
             if _alts:
                 _at = " ".join((f"{a['caps']}: {a['n']} signals ({a['per_year']}/yr), {a['avgR']:+.2f}R, "
@@ -497,12 +498,11 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                                for a in _alts
                                if a.get("avgR") is not None and a.get("test") is not None)
                 F.append(Paragraph(
-                    f"<b>The neighbours of this choice</b>, measured the same way: {_at} "
-                    f"The tightest cap looks best in the whole sample and then collapses out of sample, which "
-                    f"is exactly why these two limits come from the charts' own geometry instead of a search for "
-                    f"the optimum. Move them with <font face='Courier'>EDGE_MAX_SETUP_BARS</font> and "
-                    f"<font face='Courier'>EDGE_MAX_FLUSH_BARS</font> for a looser board.", SMALL))
-
+                    f"<b>Neighbours of this choice</b>, measured the same way: {_at} the tightest limit "
+                    f"looks best in the whole sample and then falls apart out of sample, which is why the "
+                    f"window comes from the two charts rather than from a search for the optimum. Move it "
+                    f"with <font face='Courier'>EDGE_MAX_RAIL_BARS</font> and "
+                    f"<font face='Courier'>EDGE_MAX_FLUSH_BARS</font>.", SMALL))
 
     # ---- the standalone filter study, when it has been run next to this report
     _fsj = os.path.join(os.path.dirname(os.path.abspath(path)), "filter_study.json")
