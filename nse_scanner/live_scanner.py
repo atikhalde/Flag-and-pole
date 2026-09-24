@@ -256,7 +256,11 @@ def run(args) -> int:
 
     sent = 0
     for b in buys:
-        key = f'{b["symbol"]}|{b["pole_date"]}|{"CONFIRMED" if confirmed else "PROVISIONAL"}'
+        # the key carries the ENTRY DATE, so a trigger that was voided and re-based (the
+        # LAMBODHARA case: 09-18 void, valid entry 09-23) alerts again instead of being
+        # suppressed as "already sent" for that pole
+        key = (f'{b["symbol"]}|{b["pole_date"]}|{b.get("entry_date")}|'
+               f'{"CONFIRMED" if confirmed else "PROVISIONAL"}')
         if key in fired:
             continue
         b["mcap_cr"] = mcap_map.get(b["symbol"])

@@ -1,17 +1,19 @@
 """
-Regression test for the position lifecycle - the bug behind the GODREJIND alert.
+Regression test for the two cases that were reported from live alerts.
 
-The scanner reported:
+CASE 1 - GODREJIND.NS, reported as:
+        entry 1255.6 (2026-08-13)  stop 1188.54  last 1099.0  ->  -2.34R   "in trade"
+    Its stop was crossed on 2026-08-24 and the whole base then broke down.  The 08-13 trigger
+    was a bounce that was undercut, so it must be voided on the way down and the structure must
+    end up DEAD - never carried as a position, and never displayed below -1R.
 
-    entry 1255.6 (2026-08-13)  stop 1188.54  last 1099.0 -> -2.34R  "in trade"
+CASE 2 - LAMBODHARA.NS, reported as:
+        entry 120.21 (2026-09-18)  stop 113.06
+    The shakeout was not over on 09-18: four bars later the stock printed a LOWER low (115.57
+    under 116.60) and closed below the earlier flush.  2026-09-23 is the valid entry, and the
+    stop must re-base to the new shakeout low.
 
-Two things are wrong with that line and both are asserted here:
-
-  1. GODREJIND's stop (1188.54) was crossed on 2026-08-24.  The trade is CLOSED at -1.00R.
-     Carrying it as an open position is what made a downtrend look like a live shakeout trade.
-  2. A stop cannot manufacture a -2.34R mark.  No position may ever be displayed below -1R.
-
-Run after any change to pattern.py, positions.py or live_scanner.py:
+Run after any change to pattern.py / positions.py / live_scanner.py:
 
     python3 -m nse_scanner.tests.test_positions
 """
@@ -25,11 +27,13 @@ import pandas as pd
 sys.path.insert(0, ".")
 from nse_scanner import pattern as P, positions as POS
 
-# symbol, entry date, expected state, expected exit date, expected booked R
-CASES = [
-    ("GODREJIND", "2026-08-13", POS.STOPPED, "2026-08-24", -1.0),   # the reported bug
-    ("LAMBODHARA", "2026-09-18", POS.OPEN, None, None),             # a real, still-open position
-]
+FAILS = []
+
+
+def check(ok: bool, msg: str) -> None:
+    print(("  ok   " if ok else "  FAIL ") + msg)
+    if not ok:
+        FAILS.append(msg)
 
 
 def fetch(sym: str) -> pd.DataFrame:
@@ -45,42 +49,50 @@ def fetch(sym: str) -> pd.DataFrame:
     return df
 
 
+def voided(g: pd.DataFrame, sym: str, entry_date: str):
+    v = [s for s in P.find_setups(g, sym, last_only=False) if s.entry_date == entry_date]
+    return v[-1] if v else None
+
+
 def main() -> int:
-    fails = 0
-    for sym, entry_date, state, exit_date, exit_R in CASES:
-        g = fetch(sym)
-        setups = [s for s in P.find_setups(g, sym, last_only=False) if s.entry_date == entry_date]
-        if not setups:
-            print(f"  FAIL {sym}: the {entry_date} setup is no longer detected - either the "
-                  f"pattern changed or the data moved")
-            fails += 1
-            continue
-        s = setups[-1]
-        info = POS.classify(g, s)
-        ok = True
-        if info["state"] != state:
-            print(f"  FAIL {sym}: state {info['state']}, expected {state}")
-            ok = False
-        if exit_date and info["exit_date"] != exit_date:
-            print(f"  FAIL {sym}: closed on {info['exit_date']}, expected {exit_date}")
-            ok = False
-        if exit_R is not None and abs(float(info["exit_R"]) - float(exit_R)) > 1e-9:
-            print(f"  FAIL {sym}: booked {info['exit_R']}R, expected {exit_R}R")
-            ok = False
-        # the hard rule: no display, ever, below the loss the stop allows
-        if np.isfinite(info["now_R"]) and info["now_R"] < -1.0001:
-            print(f"  FAIL {sym}: shown at {info['now_R']}R - a stop cannot allow worse than -1R")
-            ok = False
-        if info["now_R"] is not None and np.isfinite(info["now_R"]) and info["state"] != POS.OPEN \
-                and abs(float(info["now_R"]) - float(info["exit_R"])) > 1e-9:
-            print(f"  FAIL {sym}: a closed trade must mark at its booked R, not {info['now_R']}")
-            ok = False
-        if ok:
-            detail = (f"{info['state']} on {info['exit_date']} at {info['exit_R']:+.2f}R"
-                      if info["state"] != POS.OPEN else f"OPEN, marked {info['now_R']:+.2f}R")
-            print(f"  ok   {sym}: entry {s.entry_date} ₹{s.entry} stop ₹{s.stop} -> {detail}")
-    print(f"\n  {'all position lifecycle checks passed' if not fails else str(fails) + ' FAILED'}")
-    return 1 if fails else 0
+    # ---- CASE 1: GODREJIND
+    g = fetch("GODREJIND")
+    s = voided(g, "GODREJIND", "2026-08-13")
+    check(s is not None and s.outcome == "voided",
+          f"GODREJIND 2026-08-13 trigger is voided (got {s.outcome if s else 'nothing'}, "
+          f"R {s.R if s else float('nan'):+.2f}) - it was a bounce that got undercut")
+    live = P.find_setups(g, "GODREJIND", last_only=True)
+    st = live[0].status if live else "NOTHING"
+    check(st == "DEAD", f"GODREJIND is DEAD now, not a position (got {st}) - "
+                        f"the scanner used to show it as 'in trade' at -2.34R")
+
+    # ---- CASE 2: LAMBODHARA
+    g = fetch("LAMBODHARA")
+    s = voided(g, "LAMBODHARA", "2026-09-18")
+    check(s is not None and s.outcome == "voided" and abs((s.R or 0) + 0.51) < 0.06,
+          f"LAMBODHARA 2026-09-18 trigger is voided at ~-0.51R (got {s.outcome if s else 'nothing'}, "
+          f"R {s.R if s else float('nan'):+.2f}) - the shakeout made a lower low on 09-22")
+    live = P.find_setups(g, "LAMBODHARA", last_only=True)
+    if not live:
+        check(False, "LAMBODHARA has a live setup")
+    else:
+        v = live[0]
+        check(v.entry_date == "2026-09-23",
+              f"LAMBODHARA live entry is 2026-09-23 (got {v.entry_date})")
+        check(abs(v.entry - 119.93) < 0.03, f"LAMBODHARA entry price 119.93 (got {v.entry})")
+        check(abs(v.stop - 112.21) < 0.06, f"LAMBODHARA stop re-based to 112.21 (got {v.stop})")
+        check(abs(v.sweep_low - 115.57) < 0.03 and v.sweep_date == "2026-09-22",
+              f"LAMBODHARA shakeout low is 115.57 on 2026-09-22 (got {v.sweep_low} on {v.sweep_date})")
+        info = POS.classify(g, v)
+        check(info["state"] == POS.OPEN and info["now_R"] >= -1.0,
+              f"LAMBODHARA is OPEN and never shown below -1R (got {info['state']} {info['now_R']:+.2f}R)")
+
+    print()
+    if FAILS:
+        print(f"  {len(FAILS)} FAILED - do not ship this detector")
+        return 1
+    print("  all position lifecycle checks passed")
+    return 0
 
 
 if __name__ == "__main__":
