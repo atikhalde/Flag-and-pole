@@ -96,9 +96,10 @@ def status_card(s: dict) -> str:
 
 
 def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None,
-           fresh: int = None) -> str:
+           fresh: int = None, newly_closed: list[dict] = None) -> str:
     """Post-close digest: open positions, fresh triggers and the names filtered out today."""
     gated = gated or []
+    newly_closed = newly_closed or []
     n_pos = sum(1 for s in items if s.get("status") == "IN TRADE")
     head = ["\U0001F4CA <b>NSE flag scanner - " + kind + "</b>"]
     if fresh is not None:
@@ -113,6 +114,11 @@ def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None
         out.append("")
     for s in items[:40]:
         out.append(status_card(s))
+        out.append("")
+    if newly_closed:
+        out.append("<b>Closed since the last digest</b> (no longer positions)")
+        for c in newly_closed[:12]:
+            out.append("\u2022 <code>" + _esc(c.get("symbol")) + "</code> - " + _esc(c.get("pos_reason")))
         out.append("")
     if gated:
         out.append("<b>Filtered out today</b> (these would have alerted with QUALITY_PROFILE=off)")

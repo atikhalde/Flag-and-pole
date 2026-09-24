@@ -20,7 +20,8 @@ import argparse, os, sys, time
 import numpy as np
 import pandas as pd
 
-from . import config as C, data as D, pattern as P, telegram_bot as TG
+from . import config as C
+from . import positions as POS, data as D, pattern as P, telegram_bot as TG
 
 
 def stage1(uni: pd.DataFrame, limit: int = 0) -> tuple[dict, dict]:
@@ -105,6 +106,14 @@ def evaluate_live(frames: dict, live: dict, confirmed: bool, regime: dict = None
         d = dict(st.__dict__)
         d["shortName"] = lv.get("shortName")
         d["last_close"] = round(lv["last_close"], 2)
+
+        # ---- IS THIS STILL A POSITION?  An entry that is more than one bar old is a position,
+        # and a position has to be checked against its own stop and target on every run.
+        if (st.status == "BUY" and np.isfinite(st.bars_since_entry) and st.bars_since_entry > 1
+                and np.isfinite(st.entry) and np.isfinite(st.stop) and np.isfinite(st.target)):
+            info = POS.classify(gg, st)
+            d.update(pos_state=info["state"], pos_exit_date=info["exit_date"],
+                     pos_exit_R=info["exit_R"], pos_now_R=info["now_R"], pos_bars=info["bars"])
 
         if st.status == "BUY" and np.isfinite(st.rail):
             d["dist_to_rail_pct"] = round((st.rail / lv["last_close"] - 1) * 100, 2)
@@ -212,16 +221,36 @@ def run(args) -> int:
     fired = state.setdefault("alerts", {})
 
     buys = [r for r in results if r["status"] == "BUY" and not r.get("skip_reason")]
-    in_trade = [r for r in results if r["status"] == "BUY" and r.get("skip_reason")
-                and "bars old" in str(r.get("skip_reason"))]
+    carried = [r for r in results if r.get("pos_state")]
+    in_trade = [r for r in carried if r["pos_state"] == POS.OPEN]
+    closed = [r for r in carried if r["pos_state"] != POS.OPEN]
     waiting = [r for r in results if r["status"] in ("SWEPT", "FLAG_READY", "COILING")
                and not r.get("skip_reason")]
-    gated = [r for r in results if r.get("skip_reason") and r not in in_trade]
+    gated = [r for r in results if r.get("skip_reason") and r not in carried]
     for r in in_trade:
         r["status"] = "IN TRADE"
+    for r in closed:
+        r["status"] = r["pos_state"]                     # STOPPED | TARGET | EXPIRED
+        r["pos_reason"] = POS.describe(r)
 
-    print(f"[result] {len(buys)} fresh BUY signal(s) | {len(in_trade)} already in trade | "
+    # the names that ended since the last run get logged once, then never shown as open again
+    closed_log = state.setdefault("closed", {})
+    newly_closed = []
+    for r in closed:
+        k = f'{r["symbol"]}|{r.get("pole_date")}'
+        if k not in closed_log:
+            closed_log[k] = now.isoformat()
+            newly_closed.append(r)
+    stats = POS.summarize(carried)
+
+    print(f"[result] {len(buys)} fresh BUY signal(s) | {len(in_trade)} open | "
+          f"{len(closed)} closed since entry "
+          f"({stats['stopped']} stopped, {stats['target']} target, {stats['expired']} timed out) | "
           f"{len(gated)} blocked by quality gates | {len(waiting)} waiting")
+    print(f"[book]   booked {stats['booked_R']:+.1f}R on closed trades · "
+          f"open positions marked {stats['open_R']:+.1f}R")
+    for c in newly_closed[:12]:
+        print(f"    x {c['symbol']}: {c['pos_reason']}")
     for g in gated[:10]:
         print(f"    - {g['symbol']}: {g['skip_reason']}")
 
@@ -253,7 +282,8 @@ def run(args) -> int:
             r["mcap_cr"] = mcap_map.get(r["symbol"])
             items.append(r)
         items.sort(key=lambda x: {"SWEPT": 0, "BUY": 1, "IN TRADE": 2, "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
-        text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys))
+        text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys),
+                         newly_closed=newly_closed)
         if not args.no_telegram:
             digest_sent = TG.send(text)
         else:
@@ -264,11 +294,13 @@ def run(args) -> int:
     print(f"[done] alerts sent {sent} | digest {'sent' if digest_sent else ('skipped (already sent today)' if confirmed else 'no (not a post-close run)')} "
           f"| {len(in_trade)} position(s) open | state saved")
 
-    _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map)
+    _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
+                 closed=closed, newly_closed=newly_closed, stats=stats)
     return 0
 
 
-def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map):
+def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
+                 closed=None, newly_closed=None, stats=None):
     """Write the job summary shown on the Actions run page (GITHUB_STEP_SUMMARY)."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -277,10 +309,19 @@ def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, di
     L.append(f"**{mode}** · trigger `{C.TRIGGER_MODE}` · profile `{C.QUALITY_PROFILE}` · "
              f"volume cap {C.EXCLUDE_VOL_SPIKE_X}x · regime filter `{C.REGIME_FILTER}`")
     L.append("")
-    L.append(f"| fresh BUY | already in trade | filtered out | waiting | alerts sent | digest |")
-    L.append(f"|---|---|---|---|---|---|")
-    L.append(f"| **{len(buys)}** | {len(in_trade)} | {len(gated)} | {len(waiting)} | {sent} | "
+    closed = closed or []
+    newly_closed = newly_closed or []
+    stats = stats or {}
+    L.append(f"| fresh BUY | open positions | closed since entry | filtered out | waiting | alerts sent | digest |")
+    L.append(f"|---|---|---|---|---|---|---|")
+    L.append(f"| **{len(buys)}** | {len(in_trade)} | {len(closed)} | {len(gated)} | {len(waiting)} | {sent} | "
              f"{'sent' if digest_sent else 'not sent'} |")
+    if stats:
+        L.append("")
+        L.append(f"Closed trades booked **{stats.get('booked_R', 0):+.1f}R** "
+                 f"({stats.get('stopped', 0)} stopped at -1R, {stats.get('target', 0)} at target, "
+                 f"{stats.get('expired', 0)} timed out) · open positions marked "
+                 f"**{stats.get('open_R', 0):+.1f}R**")
     L.append("")
     if regime.get("ok"):
         L.append(f"NIFTY {regime['close']:.0f} vs 200-DMA {regime['ma200']:.0f} "

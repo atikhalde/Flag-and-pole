@@ -40,6 +40,28 @@ MAX_HOLD_BARS      = int(os.getenv("MAX_HOLD_BARS", 60))
 RET_HORIZON        = int(os.getenv("RET_HORIZON", 30))          # headline "return after 30 days"
 MIN_REWARD_R       = float(os.getenv("MIN_REWARD_R", 0.5))      # live alerts only: skip if reward/pole-target < this
 
+# ── the structural exit: "the flush failed, so it was never a shakeout" ───────────────────
+# With this on, a CLOSE back below the shakeout low closes the position at that close instead
+# of waiting for the ATR-buffered stop.  It is the rule you would write for the GODREJIND case,
+# and it was measured on the full first_bullish sample: +0.196R per trade against +0.210R for
+# the plain stop (train +0.236 vs +0.274, test +0.159 vs +0.154).  It mostly cuts good trades
+# a bar early, so it is OFF by default and available if you want structure-based exits.
+EXIT_ON_CLOSE_BELOW_SWEEP = os.getenv("EXIT_ON_CLOSE_BELOW_SWEEP", "0") in ("1", "true", "yes", "on")
+
+
+# ── what a "downtrend" filter was tested to do, and why none of it shipped ────────────────
+# Every structural definition of "this is a downtrend, not a shakeout" was tested on the
+# 1,326 first_bullish trades (train <2022 / test 2022+) and every one of them either fails
+# out of sample or rejects the two source charts as well:
+#     trigger closes above the prior bar's high   n=349   test +0.10R  vs +0.19R without
+#     trigger closes above the flush bar's high   n=265   test -0.01R  vs +0.19R without
+#     trigger closes above the rail               rejects NIACL and LAMBODHARA first-bullish entries
+#     the flag's floor must not be falling        train collapses +0.42R -> +0.09R
+#     a close under the shakeout low voids it     +0.196R vs +0.210R  (see above)
+# The trigger is left alone on purpose: GODREJIND averaged exactly what the rule promises, and
+# it lost.  What was actually broken was that the position was never closed.
+MIN_REWARD_R_NOTE = "see nse_scanner/positions.py - positions are closed on the stop, the target or the time stop"
+
 # ──────────────────── validated quality gates (see backtest_report.pdf) ────────────────────
 # Across 2,156 historical trades the pattern unfiltered is worth ~0 (median 30-bar return
 # +0.01% vs a +1.03% baseline). These two gates isolate the only configuration with a stable
