@@ -216,8 +216,11 @@ def subset_search(d: pd.DataFrame, min_n: int = 60) -> list[dict]:
             st = stats(x)
             tr = stats(x[x.entry_date < SPLIT])
             te = stats(x[x.entry_date >= SPLIT])
-            yrs = [st["avgR"] for _, g in x.groupby(x.entry_date.str[:4])
-                   if (st := stats(g)).get("avgR") is not None and st.get("n", 0) >= 5]
+            # NB: the loop variable must NOT be called `st` - a walrus assignment to `st`
+            # rebinds the SUBSET's own stats, and the table then prints one year's n and avgR as
+            # if they were the subset's (this shipped wrong for a while: n=18 on a 255-trade row)
+            yrs = [ys["avgR"] for _, g in x.groupby(x.entry_date.str[:4])
+                   if (ys := stats(g)).get("avgR") is not None and ys.get("n", 0) >= 5]
             rows.append(dict(conditions=" + ".join(combo), k=k, n=st["n"], win=st["win"], avgR=st["avgR"],
                              med30=st["med30"],
                              train_avgR=tr.get("avgR"), train_n=tr.get("n"),
@@ -229,10 +232,10 @@ def subset_search(d: pd.DataFrame, min_n: int = 60) -> list[dict]:
 
 
 def walk_forward(d: pd.DataFrame) -> list[dict]:
-    """The shipped rule, frozen, applied year by year. No re-tuning anywhere."""
+    """The SHIPPED rule (edge(3)), frozen, applied year by year. No re-tuning anywhere."""
     gm = gate_masks(d)
     full = pd.Series(True, index=d.index)
-    for g in VOLUME_GATE:
+    for g in CANDIDATES["edge (3) - SHIPPED"]:     # must be the rule that actually ships
         full &= gm[g]
     rows = []
     for y, g in d.groupby(d.entry_date.str[:4]):
@@ -474,11 +477,19 @@ def build(d: pd.DataFrame, args, classic: pd.DataFrame = None) -> dict:
               f"{row['cagr_0p1R']*100:>+6.1f}% {row['maxdd']*100:>5.1f}% {row['sharpe']:>6.2f}")
 
     rm = rep["risk_matched"]
-    print("\n  RISK-MATCHED against the benchmark (same drawdown, then compare CAGR; 0.1R costs):")
-    for k, v in rm.items():
-        if v:
-            print(f"    {k:14s} risk {v['risk_per_trade']:>5.2f}%/trade  CAGR {v['cagr']*100:+.1f}%  "
-                  f"maxDD {v['max_dd']*100:.1f}%  Sharpe {v['sharpe']}")
+    print("\n  WHAT A POSITION SIZE YOU COULD ACTUALLY RUN WOULD EARN (0.1R costs):")
+    for e in rep["returns"].get("equity_fixed", []):
+        print(f"    shipped rule at {e['risk_pct']:4.1f}% risk/trade  CAGR {e['cagr']*100:+6.1f}%  "
+              f"maxDD {e['max_dd']*100:5.1f}%  Sharpe {e['sharpe']:5.2f}  "
+              f"worst losing streak {e['worst_losing_streak']}")
+    _b = (rep["returns"].get("benchmark") or {})
+    if _b and "cagr" in _b:
+        print(f"    {'NIFTY 50 buy & hold':31s} CAGR {_b['cagr']*100:+6.1f}%  maxDD {_b['max_dd']*100:5.1f}%")
+    _rm = (rep.get("risk_matched") or {}).get("edge3") or {}
+    if _rm.get("capped"):
+        print(f"    (scaled to match the index's drawdown it would need {_rm['risk_per_trade']}% risk per "
+              f"trade and still only reach {_rm['max_dd']*100:.1f}% -")
+        print( "     not a position size anyone can run, so that figure is NOT quoted as a result.)")
 
     print("\n  subset search — every combination of the six conditions (train/test + year stability):")
     print(f"    {'conditions':64s} {'k':>2} {'n':>5} {'avgR':>6} {'train':>6} {'TEST':>6} {'neg yrs':>7} {'worst yr':>8}")
