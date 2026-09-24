@@ -18,10 +18,10 @@ on:
         type: string
         default: "0"
       profile:
-        description: "how selective the gates are — strict ≈ 1 signal / 3 weeks, balanced ≈ 1 / week, off = everything"
+        description: "which gate set to apply — volume is the shipped default (shakeout must be a volume event)"
         type: choice
-        default: balanced
-        options: [balanced, strict, off]
+        default: volume
+        options: [volume, balanced, strict, off]
       dry_run:
         description: "print alerts to the log instead of sending them"
         type: boolean
