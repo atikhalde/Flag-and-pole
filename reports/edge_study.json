@@ -343,19 +343,19 @@
     "totalR": 291.8
    },
    {
-    "gate": "setup <= 40 bars",
-    "n": 1022,
-    "win": 0.364,
-    "avgR": 0.162,
+    "gate": "rail <= 45 bars",
+    "n": 1132,
+    "win": 0.365,
+    "avgR": 0.18,
     "medR": -1.0,
-    "med30": 0.012,
-    "avg30": 0.0339,
+    "med30": 0.0133,
+    "avg30": 0.0356,
     "target": 0.315,
-    "stopped": 0.614,
-    "payoff": 2.2,
-    "sdR": 1.732,
-    "medRisk": 7.59,
-    "totalR": 165.1
+    "stopped": 0.615,
+    "payoff": 2.24,
+    "sdR": 1.765,
+    "medRisk": 7.55,
+    "totalR": 204.3
    },
    {
     "gate": "flush <= 6 bars",
@@ -452,42 +452,42 @@
   ],
   "equity_fixed": [
    {
-    "trades": 140,
+    "trades": 180,
     "risk_pct": 0.5,
     "cost_R": 0.1,
-    "final": 1590234.0,
-    "total_return": 0.59,
-    "cagr": 0.0461,
-    "max_dd": 0.031,
+    "final": 1816123.0,
+    "total_return": 0.816,
+    "cagr": 0.0597,
+    "max_dd": 0.027,
     "worst_losing_streak": 9,
-    "signals_per_year": 13.6,
-    "sharpe": 1.29,
+    "signals_per_year": 17.5,
+    "sharpe": 1.47,
     "years": 10.28
    },
    {
-    "trades": 140,
+    "trades": 180,
     "risk_pct": 1.0,
     "cost_R": 0.1,
-    "final": 2493801.0,
-    "total_return": 1.494,
-    "cagr": 0.0929,
-    "max_dd": 0.061,
+    "final": 3240105.0,
+    "total_return": 2.24,
+    "cagr": 0.1211,
+    "max_dd": 0.054,
     "worst_losing_streak": 9,
-    "signals_per_year": 13.6,
-    "sharpe": 1.29,
+    "signals_per_year": 17.5,
+    "sharpe": 1.47,
     "years": 10.28
    },
    {
-    "trades": 140,
+    "trades": 180,
     "risk_pct": 2.0,
     "cost_R": 0.1,
-    "final": 5893960.0,
-    "total_return": 4.894,
-    "cagr": 0.1883,
-    "max_dd": 0.119,
+    "final": 9803377.0,
+    "total_return": 8.803,
+    "cagr": 0.2485,
+    "max_dd": 0.105,
     "worst_losing_streak": 9,
-    "signals_per_year": 13.6,
-    "sharpe": 1.29,
+    "signals_per_year": 17.5,
+    "sharpe": 1.47,
     "years": 10.28
    }
   ],
@@ -554,7 +554,7 @@
    "max_dd": 0.384,
    "years": 10.72
   },
-  "equity_fixed_note": "the shipped rule (edge gates) on the implemented book: 140 trades"
+  "equity_fixed_note": "the shipped rule (edge gates) on the implemented book: 180 trades"
  },
  "ablation": [
   {
@@ -1585,34 +1585,34 @@
  "time_budget": {
   "alternatives": [
    {
-    "caps": "50 bars / 8 below the rail",
-    "n": 183,
-    "per_year": 16.6,
-    "avgR": 0.643,
-    "win": 0.448,
-    "train": 0.676,
-    "test": 0.62
+    "caps": "55 bars / 8 below the rail",
+    "n": 216,
+    "per_year": 19.6,
+    "avgR": 0.562,
+    "win": 0.44,
+    "train": 0.485,
+    "test": 0.619
    },
    {
-    "caps": "60 bars / 12 below the rail",
-    "n": 229,
-    "per_year": 20.8,
-    "avgR": 0.488,
-    "win": 0.419,
-    "train": 0.381,
-    "test": 0.571
+    "caps": "65 bars / 12 below the rail",
+    "n": 248,
+    "per_year": 22.5,
+    "avgR": 0.516,
+    "win": 0.431,
+    "train": 0.432,
+    "test": 0.578
    },
    {
-    "caps": "30 bars / 4 below the rail",
-    "n": 44,
-    "per_year": 4.4,
-    "avgR": 0.725,
-    "win": 0.523,
-    "train": 1.235,
-    "test": 0.165
+    "caps": "35 bars / 4 below the rail",
+    "n": 101,
+    "per_year": 9.2,
+    "avgR": 0.569,
+    "win": 0.436,
+    "train": 0.808,
+    "test": 0.353
    }
   ],
-  "cap_setup_bars": 40,
+  "cap_rail_bars": 45,
   "cap_flush_bars": 6,
   "base": {
    "n": 255,
@@ -1623,33 +1623,33 @@
    "test": 0.54
   },
   "capped": {
-   "n": 126,
-   "avgR": 0.752,
-   "win": 0.46,
-   "med30": 0.0435,
-   "train": 0.882,
-   "test": 0.631
+   "n": 165,
+   "avgR": 0.71,
+   "win": 0.461,
+   "med30": 0.0437,
+   "train": 0.761,
+   "test": 0.673
   },
   "removed": {
-   "n": 129,
-   "avgR": 0.233,
-   "win": 0.395,
-   "med30": 0.0358,
-   "train": -0.21,
-   "test": 0.47
+   "n": 90,
+   "avgR": 0.085,
+   "win": 0.367,
+   "med30": 0.0306,
+   "train": -0.248,
+   "test": 0.306
   },
-  "p_within_profile": 0.025,
+  "p_within_profile": 0.005,
   "chart_bars": {
    "niacl": {
-    "setup": 39,
+    "rail": 37,
     "flush": 3
    },
    "lambodhara": {
-    "setup": 22,
+    "rail": 18,
     "flush": 6
    }
   },
-  "note": "the caps are the two charts' own geometry (NIACL 39 bars / 3 under the rail, LAMBODHARA 22/6), rounded up; tightening them fails nse_scanner.tests.test_exemplars"
+  "note": "the window is the user's rule and the two charts sit well inside it (NIACL 37 bars from breakout to shakeout / LAMBODHARA 18, against a limit of 45); tightening them fails nse_scanner.tests.test_exemplars"
  },
  "candidate_compare": [
   {
@@ -1696,24 +1696,24 @@
   },
   {
    "rule": "edge (5) - SHIPPED",
-   "n": 140,
-   "per_year": 12.7,
-   "win": 0.4,
+   "n": 180,
+   "per_year": 16.4,
+   "win": 0.411,
    "avgR": 0.773,
-   "med30": 0.0318,
-   "payoff": 5.2,
-   "train_avgR": 0.811,
-   "train_n": 73,
-   "test_avgR": 0.731,
-   "test_n": 67,
-   "losing_years": 1,
+   "med30": 0.0479,
+   "payoff": 4.97,
+   "train_avgR": 0.717,
+   "train_n": 83,
+   "test_avgR": 0.822,
+   "test_n": 97,
+   "losing_years": 0,
    "years": 10,
-   "worst_year": -0.04,
-   "cagr_no_cost": 0.0533,
-   "cagr_0p1R": 0.0461,
-   "maxdd": 0.026,
-   "sharpe": 1.48,
-   "total_R": 108.2
+   "worst_year": 0.12,
+   "cagr_no_cost": 0.069,
+   "cagr_0p1R": 0.0597,
+   "maxdd": 0.023,
+   "sharpe": 1.68,
+   "total_R": 139.2
   },
   {
    "rule": "edge (3) - no time budget",
@@ -1783,11 +1783,11 @@
   "edge3": {
    "target_dd": 0.384,
    "risk_per_trade": 2.0,
-   "cagr": 0.1883,
-   "max_dd": 0.119,
-   "sharpe": 1.29,
-   "final": 5893960.0,
-   "total_return": 4.894,
+   "cagr": 0.2485,
+   "max_dd": 0.105,
+   "sharpe": 1.47,
+   "final": 9803377.0,
+   "total_return": 8.803,
    "cost_R": 0.1,
    "capped": true
   },
@@ -1811,16 +1811,16 @@
   {
    "year": 2018,
    "all_signals": -0.353,
-   "shipped_n": 10,
-   "shipped_avgR": -0.034,
-   "shipped_win": 0.4
+   "shipped_n": 13,
+   "shipped_avgR": -0.005,
+   "shipped_win": 0.385
   },
   {
    "year": 2019,
    "all_signals": 0.192,
-   "shipped_n": 11,
-   "shipped_avgR": 1.425,
-   "shipped_win": 0.545
+   "shipped_n": 13,
+   "shipped_avgR": 1.052,
+   "shipped_win": 0.462
   },
   {
    "year": 2020,
@@ -1832,44 +1832,44 @@
   {
    "year": 2021,
    "all_signals": 0.357,
-   "shipped_n": 18,
-   "shipped_avgR": 0.795,
-   "shipped_win": 0.444
+   "shipped_n": 22,
+   "shipped_avgR": 0.705,
+   "shipped_win": 0.455
   },
   {
    "year": 2022,
    "all_signals": -0.187,
-   "shipped_n": 15,
-   "shipped_avgR": 0.318,
-   "shipped_win": 0.333
+   "shipped_n": 21,
+   "shipped_avgR": -0.004,
+   "shipped_win": 0.286
   },
   {
    "year": 2023,
    "all_signals": 0.643,
-   "shipped_n": 17,
-   "shipped_avgR": 1.375,
-   "shipped_win": 0.706
+   "shipped_n": 20,
+   "shipped_avgR": 1.752,
+   "shipped_win": 0.75
   },
   {
    "year": 2024,
    "all_signals": 0.176,
-   "shipped_n": 12,
-   "shipped_avgR": -0.253,
-   "shipped_win": 0.25
+   "shipped_n": 23,
+   "shipped_avgR": 0.739,
+   "shipped_win": 0.522
   },
   {
    "year": 2025,
    "all_signals": 0.261,
-   "shipped_n": 9,
-   "shipped_avgR": 0.153,
-   "shipped_win": 0.222
+   "shipped_n": 16,
+   "shipped_avgR": 0.028,
+   "shipped_win": 0.25
   },
   {
    "year": 2026,
    "all_signals": -0.029,
-   "shipped_n": 12,
-   "shipped_avgR": 1.208,
-   "shipped_win": 0.5
+   "shipped_n": 15,
+   "shipped_avgR": 0.766,
+   "shipped_win": 0.4
   }
  ],
  "bootstrap": {
@@ -1895,12 +1895,12 @@
  "permutation": [
   {
    "feature": "setup_bars",
-   "threshold": 40,
+   "threshold": 50,
    "direction": "<=",
-   "real_test_avgR": 0.081,
+   "real_test_avgR": 0.117,
    "permutations": 1000,
-   "as_good_or_better": 971,
-   "p_value": 0.971
+   "as_good_or_better": 930,
+   "p_value": 0.93
   },
   {
    "feature": "flush_bars",
