@@ -201,7 +201,7 @@
   ],
   "best_config": [
    {
-    "label": "A \u00b7 every signal (no gate)",
+    "label": "A . every signal (no gate)",
     "trades": 1307,
     "win": 0.367,
     "avgR": 0.218,
@@ -212,29 +212,29 @@
     "stopped": 0.613
    },
    {
-    "label": "B \u00b7 deep sweep (\u2264 \u22123%) + weak market  \u2190 what the bot runs",
-    "trades": 329,
-    "win": 0.413,
-    "avgR": 0.369,
+    "label": "B . shipped profile: quiet reclaim + drift >= 25 bars + shakeout >= 8%",
+    "trades": 149,
+    "win": 0.416,
+    "avgR": 0.511,
     "medR": -1.0,
-    "med_ret": 0.0513,
-    "avg_ret": 0.0726,
-    "target": 0.356,
-    "stopped": 0.581
+    "med_ret": 0.0288,
+    "avg_ret": 0.0396,
+    "target": 0.309,
+    "stopped": 0.577
    },
    {
-    "label": "C \u00b7 deep sweep only (\u2264 \u22123%)",
-    "trades": 1278,
-    "win": 0.369,
-    "avgR": 0.221,
+    "label": "C . shipped profile + weak market",
+    "trades": 45,
+    "win": 0.378,
+    "avgR": 0.342,
     "medR": -1.0,
-    "med_ret": 0.02,
-    "avg_ret": 0.0378,
-    "target": 0.314,
-    "stopped": 0.612
+    "med_ret": 0.0215,
+    "avg_ret": 0.0541,
+    "target": 0.311,
+    "stopped": 0.622
    },
    {
-    "label": "D \u00b7 weak market only",
+    "label": "D . weak market only",
     "trades": 334,
     "win": 0.41,
     "avgR": 0.359,
@@ -351,7 +351,38 @@
     }
    },
    {
-    "label": "balanced - vol<=2x & drift>=15",
+    "label": "weak market only (NIFTY < 200-DMA)",
+    "trades": 334,
+    "win": 0.41,
+    "avgR": 0.359,
+    "medR": -1.0,
+    "med_ret": 0.0471,
+    "avg_ret": 0.071,
+    "target": 0.353,
+    "stopped": 0.584,
+    "train": {
+     "trades": 118,
+     "win": 0.5,
+     "avgR": 0.729,
+     "medR": -0.14,
+     "med_ret": 0.064,
+     "avg_ret": 0.094,
+     "target": 0.441,
+     "stopped": 0.483
+    },
+    "test": {
+     "trades": 216,
+     "win": 0.361,
+     "avgR": 0.157,
+     "medR": -1.0,
+     "med_ret": 0.0374,
+     "avg_ret": 0.0584,
+     "target": 0.306,
+     "stopped": 0.639
+    }
+   },
+   {
+    "label": "balanced - quiet reclaim, drift >= 15 bars",
     "trades": 677,
     "win": 0.344,
     "avgR": 0.329,
@@ -382,7 +413,7 @@
     }
    },
    {
-    "label": "strict - vol<=2x & drift>=25 & shakeout<=-8%",
+    "label": "strict - quiet, drift >= 25, shakeout >= 8%",
     "trades": 149,
     "win": 0.416,
     "avgR": 0.511,
@@ -452,10 +483,10 @@
   ]
  },
  "_meta": {
-  "universe": 1276,
+  "universe": "(from csv)",
   "start": "2016-01-01",
   "filters": "price>\u20b9100, mcap\u2265\u20b91000cr",
-  "generated": "2026-09-24 15:01:14",
+  "generated": "2026-09-24 15:05:30",
   "horizon": 30,
   "rule": "pole(\u22659.8% locked, 3x vol) \u2192 flag(\u226550% give-back, base intact) \u2192 sweep of flag low \u2192 close back above the rail; stop sweep-low \u2212 0.5ATR, target pole high, 60-bar time stop",
   "watchlist": [

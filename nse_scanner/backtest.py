@@ -294,6 +294,7 @@ def main():
                                 rule="pole(≥9.8% locked, 3x vol) → flag(≥50% give-back, base intact) → sweep of flag low → "
                                      "close back above the rail; stop sweep-low − 0.5ATR, target pole high, 60-bar time stop",
                                 watchlist=D.load_watchlist(), open_trades=int(len(open_df)))
+        json.dump(summary, open(f"{a.out}/backtest_summary.json", "w"), indent=1, default=str)
         from . import pdf_report
         path = pdf_report.build(df, summary, f"{a.out}/backtest_report.pdf", open_df=open_df)
         print(f"PDF report → {path}")

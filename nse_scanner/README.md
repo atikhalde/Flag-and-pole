@@ -169,8 +169,13 @@ Everything lives in `nse_scanner/config.py` (each is also an env var):
    look-ahead/survivorship bias. Real results would be somewhat worse.
 5. **No costs are modelled.** Subtract roughly 0.1–0.3R per trade for brokerage, STT, slippage and impact.
 6. **The stop-assumed-first rule** makes the back-test slightly pessimistic; keep it that way.
-7. **This is not investment advice.** It is a mechanical pattern scanner. Position sizing and the hard stop are the
-   risk management; there is no regime filter in the rule.
+7. **Filters are measured, not assumed.** Every gate in this repo was tested on a train/test time split
+   (`filter_study.py`, and the profile table in the PDF). Two earlier claims did **not** survive and were dropped:
+   the market-regime filter (it decays from +0.73R to +0.16R out of sample) and the sweep-depth gate as "the edge"
+   (it passes ~98% of signals). What survives is the quiet reclaim candle and the drift length. If a future run
+   shows a gate no longer holding on the test half, turn it off.
+8. **This is not investment advice.** It is a mechanical pattern scanner. Position sizing and the hard stop are the
+   risk management.
 
 ---
 
