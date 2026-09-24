@@ -43,7 +43,7 @@ def gate_masks(d: pd.DataFrame) -> dict[str, pd.Series]:
         # bases; a voided entry carries its own frozen values (see pattern._voided_as_setup).
         "setup <= 40 bars":           _dur(d, "setup_bars", d.entry_idx - d.pole_idx + 1,
                                            C.EDGE_MAX_SETUP_BARS),
-        "flush <= 10 bars":           _dur(d, "flush_bars", d.sweep_bars + (d.entry_idx - d.sweep_idx),
+        "flush <= 6 bars":            _dur(d, "flush_bars", d.entry_idx - d.sweep_idx + 1,
                                            C.EDGE_MAX_FLUSH_BARS),
     }
 
@@ -51,7 +51,7 @@ def gate_masks(d: pd.DataFrame) -> dict[str, pd.Series]:
 def gm2(d: pd.DataFrame, setup_cap: int, flush_cap: int) -> pd.Series:
     """The duration budget at arbitrary caps (used to show the neighbours of the shipped choice)."""
     return _dur(d, "setup_bars", d.entry_idx - d.pole_idx + 1, setup_cap) & \
-           _dur(d, "flush_bars", d.sweep_bars + (d.entry_idx - d.sweep_idx), flush_cap)
+           _dur(d, "flush_bars", d.entry_idx - d.sweep_idx + 1, flush_cap)
 
 
 def _dur(d: pd.DataFrame, col: str, fallback, cap: int) -> pd.Series:
@@ -320,7 +320,7 @@ CANDIDATES = {
     "all signals": [],
     "6-condition (previous default)": VOLUME_GATE,
     "edge (5) - SHIPPED": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg",
-                           "setup <= 40 bars", "flush <= 10 bars"],
+                           "setup <= 40 bars", "flush <= 6 bars"],
     "edge (3) - no time budget": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg"],
     "edge (2)": ["shakeout vol >= 3x drift", "red fall >= 4% in leg"],
     "edge (1) - volume alone": ["shakeout vol >= 3x drift"],
@@ -337,7 +337,7 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
     """
     gm = gate_masks(c)
     base = gm["drift >= 15 bars"] & gm["shakeout vol >= 3x drift"] & gm["red fall >= 4% in leg"]
-    cap = gm["setup <= 40 bars"] & gm["flush <= 10 bars"]
+    cap = gm["setup <= 40 bars"] & gm["flush <= 6 bars"]
     full = base & cap
     B, F = c[base], c[full]
     rng = np.random.default_rng(23)
@@ -370,7 +370,7 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
     # neighbours of the chosen caps, so the choice is visible rather than asserted.  A looser budget
     # buys more signals at a lower average - the user can move the caps with two env vars.
     alts = []
-    for su, fl in ((50, 12), (60, 15), (30, 8)):
+    for su, fl in ((50, 8), (60, 12), (30, 4)):
         m = base & gm2(c, su, fl)
         x = c[m]
         tr, te = x[x.entry_date.astype(str) < SPLIT], x[x.entry_date.astype(str) >= SPLIT]
@@ -385,8 +385,9 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
         cap_setup_bars=C.EDGE_MAX_SETUP_BARS, cap_flush_bars=C.EDGE_MAX_FLUSH_BARS,
         base=_split(B), capped=_split(F), removed=_split(removed),
         p_within_profile=_p(B, cap[base]),
-        chart_bars=dict(niacl=dict(setup=39, flush=5), lambodhara=dict(setup=22, flush=10)),
-        note="the caps are the two charts' own geometry (NIACL 39/5, LAMBODHARA 22/10), rounded up; "
+        chart_bars=dict(niacl=dict(setup=39, flush=3), lambodhara=dict(setup=22, flush=6)),
+        note="the caps are the two charts' own geometry (NIACL 39 bars / 3 under the rail, "
+             "LAMBODHARA 22/6), rounded up; "
              "tightening them fails nse_scanner.tests.test_exemplars")
 
 

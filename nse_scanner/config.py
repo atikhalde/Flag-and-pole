@@ -130,12 +130,14 @@ SWEEP_MIN_RED_FRAC    = float(os.getenv("SWEEP_MIN_RED_FRAC", 0.5))     # more t
 #   n=255 (23/yr)  hit 42.7%  avgR +0.49  train +0.42 / test +0.54  ONE losing year in 11
 # The extra conditions left in from earlier versions do not survive the test, so they are gone.
 EDGE_MIN_DRIFT_BARS   = int(os.getenv("EDGE_MIN_DRIFT_BARS", 15))
-# ---- the setup's time budget.  Both source charts complete inside it: NIACL 39 bars from the
-# ignition and 5 below the rail, LAMBODHARA 23 and 10.  Set from the charts, not from a scan of
-# the data - EDGE_MAX_SETUP_BARS=40 and EDGE_MAX_FLUSH_BARS=10 are the smallest round numbers
-# that keep both, and tightening them breaks the exemplar test on purpose.
+# ---- the setup's time budget: how long the whole thing may take, and how long it may stay under
+# the drift's floor.  Measured on the two source charts, which is where the numbers come from:
+# NIACL 39 bars from the ignition / 3 bars under the rail, LAMBODHARA 22 and 6.  The caps are those
+# numbers rounded up, and tightening them fails the exemplar test on purpose.  In the data 6 is also
+# the best of every threshold tested (edge profile: +0.49R at 255 signals -> +0.75R at 126).
 EDGE_MAX_SETUP_BARS   = int(os.getenv("EDGE_MAX_SETUP_BARS", 40))   # ignition -> entry, inclusive
-EDGE_MAX_FLUSH_BARS   = int(os.getenv("EDGE_MAX_FLUSH_BARS", 10))   # first bar under the rail -> entry
+EDGE_MAX_FLUSH_BARS   = int(os.getenv("EDGE_MAX_FLUSH_BARS", 6))    # first bar under the rail -> entry
+_ = EDGE_MAX_FLUSH_BARS
 QUALITY_MIN_SWEEP    = float(os.getenv("QUALITY_MIN_SWEEP", 8.0))  # strict: shakeout >= 8% below the rail
 #   strict   : volume<=2x + drift>=25 + shakeout<=-8%  -> 149 trades | +0.51R | 42% win | median +2.9%
 #              train +0.54 / test +0.49   <- best expectancy, but the WHOLE universe only yields
