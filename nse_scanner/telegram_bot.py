@@ -103,7 +103,8 @@ def status_card(s: dict) -> str:
             (f"sweep {s['sweep_date']} low ₹{s['sweep_low']}" if s.get("sweep_date") else ""),
         ]).strip()
     head = {"SWEPT": "🟠 swept — waiting for the reclaim", "FLAG_READY": "🔵 flag built — waiting for the sweep",
-            "COILING": "⚪ coiling", "IN TRADE": "🔵 in trade (entry already fired)"}.get(st, st)
+            "COILING": "⚪ coiling", "IN TRADE": "🔵 in trade (entry already fired)",
+            "REBASING": "🔄 flush failed — waiting for the next bullish candle"}.get(st, st)
     return "\n".join([
         f"<b>{_esc(s['symbol'])}</b>",
         head,

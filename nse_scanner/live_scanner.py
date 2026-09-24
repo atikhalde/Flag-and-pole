@@ -235,7 +235,9 @@ def run(args) -> int:
     carried = [r for r in results if r.get("pos_state")]
     in_trade = [r for r in carried if r["pos_state"] == POS.OPEN]
     closed = [r for r in carried if r["pos_state"] != POS.OPEN]
-    waiting = [r for r in results if r["status"] in ("SWEPT", "FLAG_READY", "COILING")
+    # REBASING belongs here: its earlier trigger was voided (the flush failed) and it is
+    # waiting for the next bullish candle.  Without this it would vanish from the digest.
+    waiting = [r for r in results if r["status"] in ("SWEPT", "FLAG_READY", "COILING", "REBASING")
                and not r.get("skip_reason")]
     gated = [r for r in results if r.get("skip_reason") and r not in carried and r not in watch]
     for r in in_trade:
@@ -300,7 +302,8 @@ def run(args) -> int:
         for r in waiting + buys + in_trade:      # the watchlist has its own section below
             r["mcap_cr"] = mcap_map.get(r["symbol"])
             items.append(r)
-        items.sort(key=lambda x: {"SWEPT": 0, "BUY": 1, "IN TRADE": 2, "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
+        items.sort(key=lambda x: {"REBASING": 0, "SWEPT": 0, "BUY": 1, "IN TRADE": 2,
+                                  "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
         text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys),
                          newly_closed=newly_closed, watch=watch)
         print(f"[digest] {len(items)} setup(s) on the board, {len(watch)} watchlist, {len(gated)} filtered out")

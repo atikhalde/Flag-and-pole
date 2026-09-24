@@ -79,10 +79,17 @@ jobs:
             --out reports
         continue-on-error: true
 
-      - name: Accuracy / returns / edge study (permutation test, risk-matched benchmark)
+      - name: The classic book (one entry per setup, no re-basing) for the gate statistics
+        run: |
+          REBASE_ON_NEW_LOW=0 python3 -m nse_scanner.backtest \
+            --out reports/classic --trigger first_bullish --start 2016-01-01
+        continue-on-error: true
+
+      - name: Accuracy / returns / edge study (permutation test, same-risk benchmark)
         run: |
           python3 -m nse_scanner.edge_study \
             --csv reports/backtest_trades.csv \
+            --classic-csv reports/classic/backtest_trades.csv \
             --out reports --n-boot 5000 --n-perm 1000
         continue-on-error: true
 
@@ -107,6 +114,7 @@ jobs:
             reports/filter_scan.csv
             reports/filter_study.json
             reports/edge_study.json
+            reports/classic/backtest_trades.csv
           retention-days: 90
 
       - name: Commit PDF + trades

@@ -207,13 +207,13 @@ def evidence_tables(df: pd.DataFrame) -> dict:
               & (d.sweep_leg_pct <= -C.SWEEP_MIN_DROP_PCT)
               & (d.flag_bars >= C.EDGE_MIN_DRIFT_BARS)]
     out["profiles"] = [dict(label="off - every signal", **_profile(d)),
-                       dict(label="weak market only (NIFTY < 200-DMA)",
+                       dict(label="weak market only (NIFTY < 200DMA)",
                             **_profile(d[d.nifty_bull == False])),
-                       dict(label="balanced - quiet reclaim, drift >= 15", **_profile(_balanced)),
-                       dict(label=f"strict - quiet, drift >= {C.QUALITY_MIN_DRIFT}, sweep >= {C.QUALITY_MIN_SWEEP:.0f}%",
+                       dict(label="balanced - quiet reclaim, drift>=15", **_profile(_balanced)),
+                       dict(label=f"strict - quiet, drift>={C.QUALITY_MIN_DRIFT}, sweep>={C.QUALITY_MIN_SWEEP:.0f}%",
                             **_profile(_strict)),
-                       dict(label="volume - shakeout volume + red fall", **_profile(_volume)),
-                       dict(label="edge - drift >= 15, shakeout vol >= 3x drift, red fall (DEFAULT)",
+                       dict(label="volume - shakeout vol + red fall", **_profile(_volume)),
+                       dict(label="edge - drift, shakeout vol, red fall (DEFAULT)",
                             **_profile(_edge))]
 
     out["by_reward"] = (d.assign(rb=pd.cut(d.reward_R, [0, 1, 1.5, 2, 3, 99],

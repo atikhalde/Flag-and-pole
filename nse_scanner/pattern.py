@@ -371,9 +371,9 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         s.outcome_struct = _so
         s.R_struct = round(float(_sR), 2) if np.isfinite(_sR) else np.nan
         s.bars_held_struct = int(_sk - entry_idx)
-    if voided and not last_only:
-        s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
-                           if np.isfinite(Rv)]
+        # these three describe the trade window regardless of how it ended, and the whole
+        # report leans on ret_horizon ("return after 30 bars"), so they are computed for EVERY
+        # completed trade - not only for the ones that had a voided trigger
         h = min(entry_idx + C.MAX_HOLD_BARS, n - 1)
         fwd = g.iloc[entry_idx + 1:h + 1]
         if len(fwd):
@@ -383,6 +383,9 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         s.ret_horizon = round(float(g["close"].iloc[j]) / entry - 1, 4)
     else:
         s.bars_since_entry = n - 1 - entry_idx
+    if voided and not last_only:
+        s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+                           if np.isfinite(Rv)]
     return s
 
 

@@ -370,6 +370,9 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
         fs = ev["false_signal"]; sp = fs.get("spike", {}); ok = fs.get("ok", {})
         F.append(Paragraph(f"5 · The false signal, and how to recognise it", H3))
         F.append(Paragraph(
+            "Measured on the implemented rule (voided triggers are closed trades and are counted). The "
+            "stopped % column therefore excludes them - a void is not a stop.", SMALL))
+        F.append(Paragraph(
             f"<b>A reclaim candle that arrives on explosive volume is a trap.</b> When the entry bar trades more than "
             f"{fs.get('threshold')}x its 20-day average volume the trade averages <b>{sp.get('avgR',0):+.2f}R</b> and a "
             f"median {_pct(sp.get('med_ret'),1)} after {C.RET_HORIZON} bars; every entry at or below that threshold "
@@ -397,6 +400,11 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
             "The quiet entries win on payoff, not on hit rate.", SMALL))
     if ev.get("profiles"):
         F.append(Paragraph(f"6 · The shipped quality profile, measured out-of-sample", H3))
+        F.append(Paragraph(
+            "This table is the <b>implemented rule</b> (voided triggers counted as closed trades, see "
+            "section 8), so the R figures include the cost of re-basing. The <b>significance</b> of each "
+            "condition is tested on the classic book in section 8 - read the two together: this table says "
+            "what each profile earns, section 8 says which of its conditions is real.", SMALL))
         rows = [["filter profile", "trades", "avg R", "win %", f"median {C.RET_HORIZON}-bar ret",
                  "train avg R (<2022)", "TEST avg R (2022+)"]]
         for pr in ev["profiles"]:
@@ -406,19 +414,33 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                          _pct(pr["med_ret"], 1),
                          fmt(tr.get("avgR"), tr.get("trades", 0)), fmt(te.get("avgR"), te.get("trades", 0))])
         F.append(_table(rows, [58*mm, 14*mm, 14*mm, 14*mm, 24*mm, 27*mm, 27*mm], font=7.2))
+        _by = {pr["label"].split(" - ")[0].strip(): pr for pr in ev["profiles"]}
+        _off, _vol, _edge = _by.get("off"), _by.get("volume"), _by.get("edge")
+        _pct_of = (f"{100 * _edge['trades'] / _off['trades']:.0f}% of all signals"
+                   if _off and _edge and _off.get("trades") else "a small fraction of all signals")
+        def _tr_te(pr):
+            if not pr:
+                return "-", "-"
+            t1 = (pr.get("train") or {}).get("avgR")
+            t2 = (pr.get("test") or {}).get("avgR")
+            f = lambda v: f"{v:+.2f}R" if v is not None and np.isfinite(v) else "-"
+            return f(t1), f(t2)
+        _e_tr, _e_te = _tr_te(_edge)
+        _o_tr, _o_te = _tr_te(_off)
         F.append(Paragraph(
-            "<b>The volume profile is the one to trade, and it is what the source charts actually show.</b> An earlier "
-            "version of this report filtered only on the shakeout's <i>depth</i> and on the quietness of the reclaim "
-            "candle. Both of the charts this engine was built from do much more than dip below the floor: the "
-            "shakeout is a <b>volume event with a red, falling structure</b> - NIACL breaks down on 2.0x average "
-            "volume (7.7x the volume of its own quiet drift) with 2 of 3 bars red and a -4.9% day; LAMBODHARA "
-            "collapses on 1.14x average volume (6.3x its drift) with 4 of 5 bars red and a -9.6% day. Requiring that "
-            "signature keeps 13% of signals and is the most stable gate measured here: <b>+0.46R before 2022 and "
-            "+0.59R after</b>, against +0.28R / +0.16R for taking everything. The trades it rejects - shakeouts that "
-            "never even reach average volume - earn +0.06R out of sample, i.e. nothing. Set QUALITY_PROFILE in "
-            "config.py to <i>off</i>, <i>balanced</i>, <i>strict</i>, <i>volume</i> or <i>edge</i> - the default is "
-            "<b>edge</b>: drift >= 15 bars, shakeout volume >= 3x the quiet drift's, and a red fall of at least 4%. "
-            "Those three are the only conditions that survived the permutation test below.", SMALL))
+            "<b>THE DEFAULT IS THE EDGE PROFILE, and it is what your two source charts actually show.</b> An "
+            "earlier version of this report filtered on the shakeout's <i>depth</i> and on the quietness of the "
+            "reclaim candle alone. Both charts do much more than dip below the floor: the shakeout is a "
+            "<b>volume event with a red, falling structure</b> - NIACL breaks down on 2.0x average volume "
+            "(7.7x the volume of its own quiet drift) with 2 of 3 bars red and a -4.9% day; LAMBODHARA "
+            "collapses on 1.14x average volume (6.28x its drift) with 4 of 5 bars red and a -9.6% day. "
+            f"Requiring that signature keeps {_pct_of} and is the most stable gate measured here: "
+            f"<b>{_e_tr} before 2022 and {_e_te} after</b>, against {_o_tr} / {_o_te} for taking everything. "
+            "The trades it rejects - shakeouts that never even reach average volume - earn roughly nothing "
+            "out of sample. Set QUALITY_PROFILE in config.py to <i>off</i>, <i>balanced</i>, <i>strict</i>, "
+            "<i>volume</i> or <i>edge</i>. The default is <b>edge</b>: drift >= 15 bars, shakeout volume "
+            ">= 3x the quiet drift's own volume, and a red fall of at least 4%. Those three are the only "
+            "conditions that survived the permutation test in section 8.", SMALL))
 
 
     # ---- the standalone filter study, when it has been run next to this report
@@ -456,6 +478,21 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
             o = acc.get("overall", {})
             rd = acc.get("R_distribution", {})
             F.append(Paragraph("8 . Accuracy, returns, and whether the edge is real", H3))
+            F.append(Paragraph(
+                "This section answers three questions on <b>two different bases</b>, because mixing them "
+                "is how a backtest lies. <b>The pattern's signal</b> - hit rate, payoff and which "
+                "conditions actually predict anything - is measured on the classic book: one entry per "
+                "setup, first bullish candle, no re-basing, so each setup contributes one independent "
+                "entry decision. <b>What the account would earn</b> is measured on the implemented rule, "
+                "where every trigger the re-base voided was a real trade that was opened and closed, and "
+                "is counted as one. The implemented rule therefore pays for its own churn.", SMALL))
+            bs = es.get("basis") or {}
+            va = es.get("void_accounting") or {}
+            F.append(Paragraph(
+                f"<b>On the classic book</b> ({es.get('classic_trades')} setups, one entry each). "
+                + (f"The implemented rule produced {va.get('total_rows')} trade rows, of which "
+                   f"{va.get('voided')} are triggers that were voided and closed on the way down - "
+                   f"they are counted, not discarded." if va.get("voided") else ""), SMALL))
             rows = [["accuracy measure", "value", "what it means"],
                     ["hit rate (R > 0)", _pct(o.get("win"), 1),
                      "roughly two out of three signals lose money - this is a right-tail strategy"],
@@ -471,7 +508,9 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
 
             cc = es.get("candidate_compare") or []
             if cc:
-                F.append(Paragraph("Returns, rule by rule (0.5% of capital risked per trade, compounding)", H3))
+                F.append(Paragraph("Returns, rule by rule "
+                                   "(0.5% of capital risked per trade, compounding, on the "
+                                   "implemented rule with voided triggers counted)", H3))
                 rows = [["rule", "trades", "hit", "avg R", "train R", "TEST R", "losing yrs",
                          "CAGR", "CAGR 0.1R", "max DD", "Sharpe"]]
                 for r in cc:
@@ -488,30 +527,39 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                     "after 0.1R of friction.", SMALL))
                 F.append(Paragraph(
                     "<b>Read this table carefully, because it contains a genuine trade-off.</b> Taking every signal "
-                    "produces the largest total return simply because there are five times as many of them, but its "
-                    "out-of-sample expectancy decayed to " + f"{(cc[0]['test_avgR']):+.2f}R" + ". The filtered rules "
-                    "earn roughly three times the expectancy out of sample and lose money in only one year of eleven. "
+                    f"produces more total R simply because there are {cc[0]['n'] / max(cc[2]['n'], 1):.0f}x as many "
+                    "of them, but its "
+                    "out-of-sample expectancy is " + f"{(cc[0]['test_avgR']):+.2f}R" + ". The filtered rules "
+                    "earn far more expectancy out of sample and lose money in " + f"{cc[2]['losing_years']} of "
+                    f"{cc[2]['years']}" + " years against " + f"{cc[0]['losing_years']} of {cc[0]['years']}" + ". "
                     "That is the trade: fewer, better trades, a far smaller drawdown, and a return you can actually "
                     "carry through a bad year.", SMALL))
 
-            rm = es.get("risk_matched") or {}
+            fix = (ret.get("equity_fixed") or [])
             b = (ret.get("benchmark") or {})
-            if rm.get("edge3") and b and "error" not in b:
-                e3 = rm["edge3"]
-                F.append(Paragraph("The comparison that matters — same risk, then compare return", H3))
-                rows = [["portfolio", "risk per trade", "CAGR", "max drawdown", "Sharpe"],
-                        ["the shipped rule, scaled up", f"{e3['risk_per_trade']}%", _pct(e3["cagr"], 1),
-                         _pct(e3["max_dd"], 1), f"{e3['sharpe']}"],
-                        [b.get("name", "benchmark"), "fully invested (buy & hold)", _pct(b.get("cagr"), 1),
-                         _pct(b.get("max_dd"), 1), "n/a"]]
-                F.append(_table(rows, [50*mm, 42*mm, 22*mm, 28*mm, 20*mm], font=7.6))
-                F.append(Paragraph(
-                    f"Comparing a book that risks 0.5% per trade against a fully invested index is meaningless, so the "
-                    f"rule is scaled up until it carries the <b>same drawdown</b> as the index "
-                    f"({_pct(b.get('max_dd'),1)}). At that point it compounds at <b>{_pct(e3['cagr'],1)}</b> against "
-                    f"the index's <b>{_pct(b.get('cagr'),1)}</b> over the same {b.get('years')} years. Costs of 0.1R "
-                    f"per trade are already deducted. That is the honest headline: roughly double the index return at "
-                    f"the same risk, from {e3['risk_per_trade']}% risk per trade.", SMALL))
+            rm = (es.get("risk_matched") or {}).get("edge3") or {}
+            if fix and b and "error" not in b:
+                F.append(Paragraph("The comparison that matters — a position size you could actually run", H3))
+                rows = [["portfolio", "risk per trade", "CAGR", "max drawdown", "Sharpe", "worst losing streak"]]
+                for e in fix:
+                    rows.append([f"the shipped rule at {e['risk_pct']:g}% risk",
+                                 f"{e['risk_pct']:g}%", _pct(e["cagr"], 1), _pct(e["max_dd"], 1),
+                                 f"{e['sharpe']}", str(e.get("worst_losing_streak"))])
+                rows.append([b.get("name", "benchmark"), "fully invested (buy & hold)",
+                             _pct(b.get("cagr"), 1), _pct(b.get("max_dd"), 1), "n/a", "n/a"])
+                F.append(_table(rows, [46*mm, 30*mm, 22*mm, 26*mm, 18*mm, 28*mm], font=7.4))
+                note = (f"Costs of 0.1R per trade are deducted. A book that risks 0.5% per trade cannot be "
+                        f"compared with a fully invested index, so three usable position sizes are shown. "
+                        f"At 1% risk per trade the rule compounds at {_pct(fix[1]['cagr'],1)} against the "
+                        f"index's {_pct(b.get('cagr'),1)}, at a fraction of the index's drawdown.")
+                if rm.get("capped"):
+                    note += (f" Note what is deliberately absent: the rule is <b>not</b> scaled up until "
+                             f"its drawdown matches the index's {_pct(b.get('max_dd'),1)}. At the cap of "
+                             f"{rm['risk_per_trade']}% risk per trade it still only reaches "
+                             f"{_pct(rm.get('max_dd'),1)}, and a position size beyond that stops being "
+                             f"something an account can carry - the CAGR it would imply is a property of "
+                             f"the model, not a forecast, and is not quoted here as a result.")
+                F.append(Paragraph(note, SMALL))
 
             perm = es.get("permutation") or []
             if perm:
@@ -528,28 +576,43 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                                  f"{r['as_good_or_better']} of {r['permutations']}",
                                  f"{r['p_value']}" if r.get("p_value") is not None else "-"])
                 F.append(_table(rows, [58*mm, 26*mm, 24*mm, 42*mm, 16*mm], font=7.2, align_right_from=1))
-                F.append(Paragraph(
-                    "<b>Only one condition is statistically earned: the shakeout's volume against the quiet drift "
-                    "(p = 0.028).</b> Each other feature was scrambled across trades a thousand times and re-tested "
-                    "with the same threshold; most of them were matched or beaten by random shuffling a fifth to a "
-                    "half of the time. That is why the shipped rule keeps three conditions and not six - the rest "
-                    "were describing noise. Treat any filter whose p-value is above 0.05 as a preference, not an edge.",
-                    SMALL))
+                _pr = [x for x in perm if x.get("p_value") is not None]
+                _best = min(_pr, key=lambda x: x["p_value"]) if _pr else None
+                _rest = [x for x in _pr if x is not _best]
+                if _best:
+                    _txt = ("<b>Only one condition is statistically earned: the shakeout's volume against "
+                            f"the quiet drift (p = {_best['p_value']}).</b> It was scrambled across trades "
+                            f"{_best['permutations']} times with the same threshold applied, and only "
+                            f"{_best['as_good_or_better']} shuffles did as well or better. ")
+                    if _rest:
+                        lo = min(x["as_good_or_better"] for x in _rest)
+                        hi = max(x["as_good_or_better"] for x in _rest)
+                        _txt += (f"The other {len(_rest)} condition(s) were matched or beaten by random "
+                                 f"shuffling between {lo} and {hi} times out of {_best['permutations']}. ")
+                    _txt += ("Treat any filter whose p-value is above 0.05 as a preference rather than an "
+                             "edge; the shipped rule keeps the one that earned its place, plus the two that "
+                             "keep the trade count, and therefore the cost drag, down.")
+                    F.append(Paragraph(_txt, SMALL))
 
             eq = ret.get("equity") or []
             if eq:
-                F.append(Paragraph("Costs are the real enemy — the same book at four cost levels", H3))
+                F.append(Paragraph("Costs are the real enemy — the same book at four cost levels "
+                                   "(every signal, before the gates)", H3))
                 rows = [["round-trip cost", "final multiple", "total return", "CAGR", "max drawdown", "Sharpe"]]
                 for e in eq:
                     rows.append([f"{e['cost_R']}R per trade", f"x{e['final']/1e6:.2f}", _pct(e["total_return"], 0),
                                  _pct(e["cagr"], 1), _pct(e["max_dd"], 1), f"{e['sharpe']}"])
                 F.append(_table(rows, [32*mm, 24*mm, 24*mm, 20*mm, 26*mm, 18*mm], font=7.4, align_right_from=1))
+                _drop = abs(eq[0]["cagr"] - eq[1]["cagr"]) * 100
                 F.append(Paragraph(
-                    "Every number in this report is <b>gross</b>. At 0.1R of friction per trade - about 0.3% of the "
-                    "entry price on a typical 8% stop, which is realistic for liquid names - the unfiltered book "
-                    "drops from " + _pct(eq[0]["cagr"], 1) + " to " + _pct(eq[1]["cagr"], 1) + " CAGR. At 0.25R it "
-                    "is under water. This is the single biggest threat to the strategy and it is why the filtered "
-                    "rules, which trade far less often, are the ones worth running.", SMALL))
+                    "At 0.1R of friction per trade - about 0.3% of the entry price on a typical 8% stop, which "
+                    "is realistic for liquid names - the unfiltered book moves from "
+                    + _pct(eq[0]["cagr"], 1) + " to " + _pct(eq[1]["cagr"], 1) + " CAGR, a swing of "
+                    + f"{_drop:.1f} percentage points, and at 0.25R the decay is starker still. Trading "
+                    "frequency, not the pattern, is what decides whether costs eat the result - which is why "
+                    "the filtered rules, which take a fraction of the signals, are the ones worth running. "
+                    "Every return table in this report is shown with 0.1R of friction deducted where it says "
+                    "so, and the difference between gross and net is never small.", SMALL))
             F.append(PageBreak())
         except Exception as _e:
             pass
