@@ -74,6 +74,12 @@ class Setup:
     sweep_idx: int = -1
     flag_end_idx: int = -1
     pole_idx: int = -1
+    # ---- how long the whole setup took.  The two source charts bound this: NIACL breaks its rail
+    # and reclaims it 5 bars later (39 bars from the ignition of 2026-04-10), LAMBODHARA 10 bars
+    # later (23 bars from 2026-08-24).  A "flag" that takes two months to shake out is not that
+    # pattern - it is a stock drifting down, which is what the duration gates now reject. ----
+    setup_bars: int = -1                # ignition bar -> entry bar, inclusive
+    flush_bars: int = -1                # first bar under the rail -> entry bar, inclusive
 
 
 def _prep(g: pd.DataFrame) -> pd.DataFrame:
@@ -134,7 +140,8 @@ def find_setups(raw: pd.DataFrame, symbol: str, last_only: bool = True,
     return setups
 
 
-def _voided_as_setup(g: pd.DataFrame, s: "Setup", a: int, b: int, stop_a: float, R_a: float) -> "Setup":
+def _voided_as_setup(g: pd.DataFrame, s: "Setup", a: int, b: int, stop_a: float, R_a: float,
+                     flush_a: int = None) -> "Setup":
     """A trigger that was voided is a trade you would have taken and closed - report it as one."""
     v = Setup(symbol=s.symbol, pole_date=s.pole_date, pole_low=s.pole_low, pole_high=s.pole_high,
               pole_high_date=s.pole_high_date, pole_gain=s.pole_gain, flag_bars=s.flag_bars,
@@ -144,6 +151,12 @@ def _voided_as_setup(g: pd.DataFrame, s: "Setup", a: int, b: int, stop_a: float,
     v.sweep_red_frac, v.sweep_vol_x20, v.sweep_vol_vs_drift = s.sweep_red_frac, s.sweep_vol_x20, s.sweep_vol_vs_drift
     v.sweep_close_pos, v.sweep_leg_pct, v.turnover_cr = s.sweep_close_pos, s.sweep_leg_pct, s.turnover_cr
     v.entry_idx, v.entry_date = int(a), str(g.index[a].date())
+    # a voided entry is still a trade that was opened, so it carries the same time budget.  These
+    # are the values that were true when it fired - a later re-base must not rewrite them.
+    if s.pole_idx >= 0:
+        v.setup_bars = int(a - s.pole_idx + 1)
+    if flush_a is not None:
+        v.flush_bars = int(flush_a)
     v.entry, v.stop, v.target = round(float(g["close"].iloc[a]), 2), round(float(stop_a), 2), s.pole_high
     v.risk_pct = round((v.entry - v.stop) / v.entry * 100, 2) if v.entry > v.stop else np.nan
     v.reward_R = round((v.target - v.entry) / (v.entry - v.stop), 2) if v.entry > v.stop else np.nan
@@ -237,12 +250,14 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         return float(g["close"].iloc[k]) > max(rail, prior5)
 
     entry_idx = None
+    flush_at = None                      # bars below the rail when THIS entry fired (frozen here:
+                                         # a re-base moves the low afterwards and must not rewrite it)
     sh_low, sh_low_idx = float(g["low"].iloc[sweep]), sweep
     for k in range(sweep + 1, min(sweep + 1 + C.SWEEP_MAX_BARS, n)):
         if float(g["low"].iloc[k]) < sh_low:
             sh_low, sh_low_idx = float(g["low"].iloc[k]), k
         if _is_trigger(k):
-            entry_idx = k
+            entry_idx, flush_at = k, int(sh_low_idx - sweep + 1) + int(k - sweep)
             break
 
     # ---- RE-BASE: a trigger that is later undercut and closed below was a bounce inside the
@@ -260,12 +275,12 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
             break
         if inval is None:
             break
-        nxt = None
+        nxt, flush_next = None, None
         for k in range(inval + 1, min(inval + 1 + C.SWEEP_MAX_BARS, n)):
             if float(g["low"].iloc[k]) < sh_low:
                 sh_low, sh_low_idx = float(g["low"].iloc[k]), k
             if _is_trigger(k):
-                nxt = k
+                nxt, flush_next = k, int(sh_low_idx - sweep + 1) + int(k - sweep)
                 break
         _seg = g["low"].iloc[entry_idx:inval + 1]
         if float(_seg.min()) < sh_low:
@@ -279,8 +294,8 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         _Rv = ((float(g["close"].iloc[inval]) - float(g["close"].iloc[entry_idx])) / _risk) if _risk > 0 else np.nan
         if np.isfinite(_Rv):
             voided_R += _Rv
-        voided.append((int(entry_idx), int(inval), float(_stop), float(_Rv)))
-        entry_idx = nxt
+        voided.append((int(entry_idx), int(inval), float(_stop), float(_Rv), flush_at))
+        entry_idx, flush_at = nxt, flush_next
         if entry_idx is None:
             break
     if sh_low < pole_low * C.BASE_INTACT_TOL:              # the whole base is gone
@@ -293,7 +308,7 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         if voided and not last_only:
             # the base is dead, but the entries that were voided on the way down are trades
             # that happened and were closed.  Dropping them is how this rule flatters itself.
-            s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+            s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv, fl) for a, b, st, Rv, fl in voided
                                if np.isfinite(Rv)]
             return s
         return s if last_only else None
@@ -321,12 +336,13 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
     s.rebased_from = ",".join(str(g.index[a].date()) for a, *_ in voided)
     s.R_voided = round(voided_R, 2)
     if entry_idx is None:
+        _duration(s, n - 1, None)
         s.status = "REBASING" if voided else "SWEPT"       # shakeout still running / waiting for a candle
         if voided and not last_only:
             # no new trigger has appeared yet, but the voided entries are still trades that
             # happened and were closed.  They must be counted - dropping them is how a
             # "wait for a cleaner entry" rule flatters itself.
-            s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+            s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv, fl) for a, b, st, Rv, fl in voided
                                if np.isfinite(Rv)]
             return s
         return s if last_only else None
@@ -335,6 +351,7 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
     atr = float(g["atr"].iloc[entry_idx]) if np.isfinite(g["atr"].iloc[entry_idx]) else entry * 0.03
     stop = min(sh_low, float(g["low"].iloc[sweep:entry_idx + 1].min())) - C.ATR_BUF * atr
     s.entry_idx, s.entry_date, s.entry, s.atr = entry_idx, str(g.index[entry_idx].date()), round(entry, 2), round(atr, 2)
+    _duration(s, n - 1, entry_idx)
     s.stop, s.target = round(stop, 2), round(pole_hi, 2)
     s.risk_pct = round((entry - stop) / entry * 100, 2)
     s.reward_R = round((pole_hi - entry) / (entry - stop), 2) if entry > stop else np.nan
@@ -384,9 +401,20 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
     else:
         s.bars_since_entry = n - 1 - entry_idx
     if voided and not last_only:
-        s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv) for a, b, st, Rv in voided
+        s.voided_setups = [_voided_as_setup(g, s, a, b, st, Rv, fl) for a, b, st, Rv, fl in voided
                            if np.isfinite(Rv)]
     return s
+
+
+def _duration(s: "Setup", last_idx: int, entry_idx) -> None:
+    """Stamp how long the setup took.  end = the entry bar, or the newest bar while the pattern is
+    still waiting for its trigger - so a watchlist name that has sprawled past the budget is
+    already flagged instead of quietly being promoted later."""
+    end = entry_idx if entry_idx is not None else last_idx
+    if s.pole_idx >= 0 and end >= s.pole_idx:
+        s.setup_bars = int(end - s.pole_idx + 1)
+    if s.sweep_idx >= 0 and end >= s.sweep_idx:
+        s.flush_bars = int(int(s.sweep_bars) + (end - s.sweep_idx))
 
 
 def setups_to_frame(setups: list[Setup]) -> pd.DataFrame:

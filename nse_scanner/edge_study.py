@@ -39,7 +39,27 @@ def gate_masks(d: pd.DataFrame) -> dict[str, pd.Series]:
         "shakeout vol >= 3x drift":   d.sweep_vol_vs_drift >= C.SWEEP_MIN_VOL_VS_DRIFT,
         "red fall >= 4% in leg":      d.sweep_leg_pct <= -C.SWEEP_MIN_DROP_PCT,
         "leg more than half red":     d.sweep_red_frac >= C.SWEEP_MIN_RED_FRAC,
+        # the setup's time budget.  Built from the bar indices so it means the same thing on both
+        # bases; a voided entry carries its own frozen values (see pattern._voided_as_setup).
+        "setup <= 40 bars":           _dur(d, "setup_bars", d.entry_idx - d.pole_idx + 1,
+                                           C.EDGE_MAX_SETUP_BARS),
+        "flush <= 10 bars":           _dur(d, "flush_bars", d.sweep_bars + (d.entry_idx - d.sweep_idx),
+                                           C.EDGE_MAX_FLUSH_BARS),
     }
+
+
+def gm2(d: pd.DataFrame, setup_cap: int, flush_cap: int) -> pd.Series:
+    """The duration budget at arbitrary caps (used to show the neighbours of the shipped choice)."""
+    return _dur(d, "setup_bars", d.entry_idx - d.pole_idx + 1, setup_cap) & \
+           _dur(d, "flush_bars", d.sweep_bars + (d.entry_idx - d.sweep_idx), flush_cap)
+
+
+def _dur(d: pd.DataFrame, col: str, fallback, cap: int) -> pd.Series:
+    """A duration cap as a mask.  Uses the stamped column when the frame carries it (it is stamped
+    at the moment the entry fired) and falls back to index arithmetic for older CSVs."""
+    v = d[col] if col in d.columns else fallback
+    v = pd.to_numeric(v, errors="coerce")
+    return (v >= 0) & (v <= cap)
 
 
 VOLUME_GATE = ["quiet reclaim (vol<=2x)", "drift >= 15 bars", "shakeout vol >= 1x avg",
@@ -235,7 +255,7 @@ def walk_forward(d: pd.DataFrame) -> list[dict]:
     """The SHIPPED rule (edge(3)), frozen, applied year by year. No re-tuning anywhere."""
     gm = gate_masks(d)
     full = pd.Series(True, index=d.index)
-    for g in CANDIDATES["edge (3) - SHIPPED"]:     # must be the rule that actually ships
+    for g in CANDIDATES["edge (5) - SHIPPED"]:     # must be the rule that actually ships
         full &= gm[g]
     rows = []
     for y, g in d.groupby(d.entry_date.str[:4]):
@@ -299,10 +319,75 @@ def permutation_test(d: pd.DataFrame, feature: str, threshold: float, direction:
 CANDIDATES = {
     "all signals": [],
     "6-condition (previous default)": VOLUME_GATE,
-    "edge (3) - SHIPPED": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg"],
+    "edge (5) - SHIPPED": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg",
+                           "setup <= 40 bars", "flush <= 10 bars"],
+    "edge (3) - no time budget": ["drift >= 15 bars", "shakeout vol >= 3x drift", "red fall >= 4% in leg"],
     "edge (2)": ["shakeout vol >= 3x drift", "red fall >= 4% in leg"],
     "edge (1) - volume alone": ["shakeout vol >= 3x drift"],
 }
+
+
+def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
+    """What the time budget is worth ON TOP of the shipped edge profile.
+
+    A duration cap on its own does not pay - the longest setups in the raw book are the best ones -
+    so the only meaningful test is whether it improves the profile it is added to.  The permutation
+    therefore shuffles the two durations INSIDE the edge subset: the question is "of the signals
+    this profile already accepts, are the slow ones worse?", not "are slow signals worse in general".
+    """
+    gm = gate_masks(c)
+    base = gm["drift >= 15 bars"] & gm["shakeout vol >= 3x drift"] & gm["red fall >= 4% in leg"]
+    cap = gm["setup <= 40 bars"] & gm["flush <= 10 bars"]
+    full = base & cap
+    B, F = c[base], c[full]
+    rng = np.random.default_rng(23)
+
+    def _p(sub: pd.DataFrame, m: pd.Series) -> float:
+        y = sub.R.values
+        k = int(m.sum())
+        if k == 0 or len(y) == 0:
+            return float("nan")
+        obs = y[m.values].mean()
+        hits = 0
+        for _ in range(n_perm):
+            pp = rng.permutation(len(y))
+            sel = np.zeros(len(y), bool)
+            sel[pp[:k]] = True
+            if y[sel].mean() >= obs:
+                hits += 1
+        return round(hits / n_perm, 3)
+
+    def _split(x):
+        tr, te = x[x.entry_date.astype(str) < SPLIT], x[x.entry_date.astype(str) >= SPLIT]
+        return dict(n=int(len(x)), avgR=round(float(x.R.mean()), 3) if len(x) else None,
+                    win=round(float((x.R > 0).mean()), 3) if len(x) else None,
+                    med30=round(float(x.ret_horizon.median()), 4) if len(x) else None,
+                    train=round(float(tr.R.mean()), 3) if len(tr) else None,
+                    test=round(float(te.R.mean()), 3) if len(te) else None)
+
+    removed = c[base & ~cap]
+
+    # neighbours of the chosen caps, so the choice is visible rather than asserted.  A looser budget
+    # buys more signals at a lower average - the user can move the caps with two env vars.
+    alts = []
+    for su, fl in ((50, 12), (60, 15), (30, 8)):
+        m = base & gm2(c, su, fl)
+        x = c[m]
+        tr, te = x[x.entry_date.astype(str) < SPLIT], x[x.entry_date.astype(str) >= SPLIT]
+        alts.append(dict(caps=f"{su} bars / {fl} below the rail", n=int(len(x)),
+                         per_year=round(len(x) / max(1, x.year.nunique()), 1),
+                         avgR=round(float(x.R.mean()), 3) if len(x) else None,
+                         win=round(float((x.R > 0).mean()), 3) if len(x) else None,
+                         train=round(float(tr.R.mean()), 3) if len(tr) else None,
+                         test=round(float(te.R.mean()), 3) if len(te) else None))
+    return dict(
+        alternatives=alts,
+        cap_setup_bars=C.EDGE_MAX_SETUP_BARS, cap_flush_bars=C.EDGE_MAX_FLUSH_BARS,
+        base=_split(B), capped=_split(F), removed=_split(removed),
+        p_within_profile=_p(B, cap[base]),
+        chart_bars=dict(niacl=dict(setup=39, flush=5), lambodhara=dict(setup=22, flush=10)),
+        note="the caps are the two charts' own geometry (NIACL 39/5, LAMBODHARA 22/10), rounded up; "
+             "tightening them fails nse_scanner.tests.test_exemplars")
 
 
 def candidate_compare(d: pd.DataFrame) -> list[dict]:
@@ -395,10 +480,11 @@ def build(d: pd.DataFrame, args, classic: pd.DataFrame = None) -> dict:
     rep["returns"] = returns(d, nifty_benchmark())
     rep["ablation"] = ablation(c)
     rep["subset_search"] = subset_search(c)
+    rep["time_budget"] = time_budget(c, args.n_perm)
     rep["candidate_compare"] = candidate_compare(d)
     def edge_mask(frame):
         m = pd.Series(True, index=frame.index)
-        for _cond in CANDIDATES["edge (3) - SHIPPED"]:   # NB: not `c` - it would clobber the
+        for _cond in CANDIDATES["edge (5) - SHIPPED"]:   # NB: not `c` - it would clobber the
             m &= gate_masks(frame)[_cond]                # classic-book frame
         return m
     _gated = d[edge_mask(d)]                             # mask built ON d, never borrowed
@@ -412,6 +498,9 @@ def build(d: pd.DataFrame, args, classic: pd.DataFrame = None) -> dict:
     rep["walk_forward"] = walk_forward(c)
     rep["bootstrap"] = bootstrap_ci(c, args.n_boot)
     rep["permutation"] = [
+        *( [permutation_test(c, "setup_bars", C.EDGE_MAX_SETUP_BARS, "<=", args.n_perm),
+            permutation_test(c, "flush_bars", C.EDGE_MAX_FLUSH_BARS, "<=", args.n_perm)]
+           if "setup_bars" in c.columns and "flush_bars" in c.columns else [] ),
         permutation_test(c, "sweep_vol_vs_drift", C.SWEEP_MIN_VOL_VS_DRIFT, ">=", args.n_perm),
         permutation_test(c, "sweep_vol_x20", C.SWEEP_MIN_VOL_X20, ">=", args.n_perm),
         permutation_test(c, "sweep_leg_pct", -C.SWEEP_MIN_DROP_PCT, "<=", args.n_perm),
@@ -507,6 +596,22 @@ def build(d: pd.DataFrame, args, classic: pd.DataFrame = None) -> dict:
     for k, v in rep["bootstrap"].items():
         print(f"    {k:12s} n={v['n']:4d}  avgR {v['avgR']:+.3f}  CI [{v['ci95'][0]:+.3f}, {v['ci95'][1]:+.3f}]  "
               f"P(edge>0) {v['p_gt_zero']*100:.1f}%")
+    tb = rep.get("time_budget") or {}
+    if tb:
+        b, f, rm = tb["base"], tb["capped"], tb["removed"]
+        print(f"\n  the setup's time budget (cap {tb['cap_setup_bars']} bars ignition->entry, "
+              f"{tb['cap_flush_bars']} bars below the rail):")
+        print(f"    edge profile without a budget : n={b['n']:4d}  avgR {b['avgR']:+.3f}  "
+              f"train {b['train']:+.3f}  test {b['test']:+.3f}")
+        print(f"    shipped (edge + time budget)  : n={f['n']:4d}  avgR {f['avgR']:+.3f}  "
+              f"train {f['train']:+.3f}  test {f['test']:+.3f}  hit {f['win']*100:.0f}%")
+        print(f"    what the budget removes       : n={rm['n']:4d}  avgR {rm['avgR']:+.3f}  "
+              f"win {rm['win']*100:.0f}%   (the slow ones - this is the profit of waiting)")
+        print(f"    permutation inside the profile: p={tb['p_within_profile']}")
+        for a in tb.get("alternatives") or []:
+            print(f"      alt {a['caps']:26s} n={a['n']:4d} ({a['per_year']}/yr)  avgR {a['avgR']:+.3f}  "
+                  f"test {a['test']:+.3f}  hit {a['win']*100:.0f}%")
+
     print("\n  permutation test (could the gate look this good by chance?):")
     for p in rep["permutation"]:
         print(f"    {p['feature']:22s} {p['direction']} {p['threshold']:<5} real test-half avgR {p['real_test_avgR']:+.3f}  "

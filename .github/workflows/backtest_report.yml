@@ -113,6 +113,13 @@ jobs:
           fs = json.load(open("reports/filter_study.json")) if os.path.exists("reports/filter_study.json") else {}
           if not fs.get("baseline"):
               bad.append("filter_study.json has no baseline - the study did not finish")
+          if not es.get("time_budget"):
+              bad.append("edge_study.json has no time_budget - the duration gates were never measured")
+          # the durations must survive the pipeline: if they are missing the gates silently pass
+          # everything, which is the worst possible failure
+          for _c in ("setup_bars", "flush_bars"):
+              if _c not in t.columns or (pd.to_numeric(t[_c], errors="coerce") < 0).mean() > 0.05:
+                  bad.append(f"backtest_trades.csv is missing usable {_c} - the time budget cannot be applied")
           # the rebuild step is allowed to fail (so a broken report still leaves artifacts), which means
           # a silently stale PDF would otherwise pass every check above.  A PDF older than the studies it
           # is supposed to contain is a failed report, not a passing one.

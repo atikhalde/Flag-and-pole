@@ -193,6 +193,9 @@ def evidence_tables(df: pd.DataFrame) -> dict:
         ok=dict(**_cfg(d[d.vol_x20 <= C.EXCLUDE_VOL_SPIKE_X])) if len(d[d.vol_x20 <= C.EXCLUDE_VOL_SPIKE_X]) else {},
         threshold=C.EXCLUDE_VOL_SPIKE_X)
 
+    def _dur_col(frame, col, fallback):
+        return frame[col] if col in frame.columns else fallback
+
     # ---- the shipped quality profile, time-split so nobody is fooled by in-sample luck
     def _profile(x):
         tr = x[x.entry_date.astype(str) < "2022-01-01"]
@@ -205,7 +208,14 @@ def evidence_tables(df: pd.DataFrame) -> dict:
     _balanced = d[(d.vol_x20 <= 2.0) & (d.flag_bars >= 15)]
     _edge = d[(d.sweep_vol_vs_drift >= C.SWEEP_MIN_VOL_VS_DRIFT)
               & (d.sweep_leg_pct <= -C.SWEEP_MIN_DROP_PCT)
-              & (d.flag_bars >= C.EDGE_MIN_DRIFT_BARS)]
+              & (d.flag_bars >= C.EDGE_MIN_DRIFT_BARS)
+              # the setup's time budget.  set from the two source charts (NIACL 39/5, LAMBODHARA
+              # 22/10) and stamped on every row when the entry fired - including the voided ones,
+              # which carry their own frozen values.  Falls back to the bar indices for old CSVs.
+              & (pd.to_numeric(_dur_col(d, "setup_bars", d.entry_idx - d.pole_idx + 1),
+                               errors="coerce").between(0, C.EDGE_MAX_SETUP_BARS))
+              & (pd.to_numeric(_dur_col(d, "flush_bars", d.sweep_bars + (d.entry_idx - d.sweep_idx)),
+                               errors="coerce").between(0, C.EDGE_MAX_FLUSH_BARS))]
     out["profiles"] = [dict(label="off - every signal", **_profile(d)),
                        dict(label="weak market only (NIFTY < 200DMA)",
                             **_profile(d[d.nifty_bull == False])),
@@ -213,7 +223,7 @@ def evidence_tables(df: pd.DataFrame) -> dict:
                        dict(label=f"strict - quiet, drift>={C.QUALITY_MIN_DRIFT}, sweep>={C.QUALITY_MIN_SWEEP:.0f}%",
                             **_profile(_strict)),
                        dict(label="volume - shakeout vol + red fall", **_profile(_volume)),
-                       dict(label="edge - drift, shakeout vol, red fall (DEFAULT)",
+                       dict(label="edge - drift, shakeout vol, red fall, time budget (DEFAULT)",
                             **_profile(_edge))]
 
     out["by_reward"] = (d.assign(rb=pd.cut(d.reward_R, [0, 1, 1.5, 2, 3, 99],

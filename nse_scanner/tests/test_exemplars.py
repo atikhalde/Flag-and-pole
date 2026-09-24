@@ -75,6 +75,28 @@ def main():
         hit_ok = str(s.entry_date)[:10] == entry_date
         good &= hit_ok
         print(f"  {'ok  ' if hit_ok else 'FAIL'} {sym} entry date: got {str(s.entry_date)[:10]}  expected {entry_date}")
+        # ---- the time budget.  The caps are the budget of the SHIPPED rule, so the duration is
+        # measured in the shipped trigger mode (the geometry checks above stay in rail_reclaim,
+        # which is what pins the rail and the shakeout low to the drawn chart).
+        _mode = C.TRIGGER_MODE
+        try:
+            C.TRIGGER_MODE = C.DEFAULT_TRIGGER_MODE
+            _out = P.find_setups(g, sym, last_only=False)
+            _hit = [x for x in _out if x.pole_date == ign]
+            _d = _hit[-1] if _hit else None
+        finally:
+            C.TRIGGER_MODE = _mode
+        if _d is None:
+            print(f"  FAIL {sym}: detected under {_mode} but not under the shipped "
+                  f"{C.DEFAULT_TRIGGER_MODE}"); good = False
+        else:
+            print(f"       (shipped mode {C.DEFAULT_TRIGGER_MODE}: entry {str(_d.entry_date)[:10]}, "
+                  f"{_d.setup_bars} bars from ignition, {_d.flush_bars} bars below the rail)")
+            for name, got, cap in (("bars ignition->entry", _d.setup_bars, C.EDGE_MAX_SETUP_BARS),
+                                   ("bars below the rail", _d.flush_bars, C.EDGE_MAX_FLUSH_BARS)):
+                hit_ok = 0 <= got <= cap
+                good &= hit_ok
+                print(f"  {'ok  ' if hit_ok else 'FAIL'} {sym} {name}: {got}  (cap {cap})")
         print(f"       ({s.flag_bars} drift bars, ends {s.flag_end_date}, sweep {s.sweep_below_pct}% below rail, "
               f"risk {s.risk_pct}%, {s.reward_R}R, outcome {s.outcome or 'open'})")
 
