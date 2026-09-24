@@ -145,6 +145,14 @@ def evaluate_live(frames: dict, live: dict, confirmed: bool, regime: dict = None
                 if np.isfinite(st.sweep_leg_pct) and st.sweep_leg_pct > -C.SWEEP_MIN_DROP_PCT:
                     reasons.append(f"worst day in the shakeout {st.sweep_leg_pct}% "
                                    f"(needs <= -{C.SWEEP_MIN_DROP_PCT}% - a red fall, not a quiet bleed)")
+                # ---- the time budget: the setup may not sprawl.  This is what separates a
+                # two-week flush from a two-month downtrend wearing a flag's clothes.
+                if st.setup_bars >= 0 and st.setup_bars > C.EDGE_MAX_SETUP_BARS:
+                    reasons.append(f"setup took {st.setup_bars} bars from ignition to entry "
+                                   f"(> {C.EDGE_MAX_SETUP_BARS} - NIACL took 39, LAMBODHARA 23)")
+                if st.flush_bars >= 0 and st.flush_bars > C.EDGE_MAX_FLUSH_BARS:
+                    reasons.append(f"spent {st.flush_bars} bars below the rail before reclaiming it "
+                                   f"(> {C.EDGE_MAX_FLUSH_BARS} - NIACL took 5, LAMBODHARA 10)")
             elif C.QUALITY_PROFILE == "volume":
                 # the shakeout must be a volume event with a red, falling structure, and the
                 # reclaim must be quiet - this is the signature the two source charts show
