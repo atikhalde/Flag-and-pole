@@ -52,6 +52,10 @@ class Setup:
     sweep_close_pos: float = np.nan    # where the shakeout bar closed in its range (0 = on the low)
     sweep_leg_pct: float = np.nan      # size of the shakeout's largest one-day drop (%)
     turnover_cr: float = np.nan
+    # ---- what the trigger bar itself did (entry quality, no look-ahead) ----
+    entry_gt_prior_high: bool = False   # close > the previous bar's high (it actually reclaimed ground)
+    entry_gt_flush_high: bool = False   # close > the high of the bar that made the flush low
+    entry_vs_rail_pct: float = np.nan   # entry close vs the drift floor
     # outcome fields (backtest only)
     outcome: str = ""
     R: float = np.nan
@@ -59,6 +63,10 @@ class Setup:
     mfe: float = np.nan
     mae: float = np.nan
     bars_held: int = np.nan
+    # the structural exit: close back below the shakeout low = the flush failed = not a shakeout
+    R_struct: float = np.nan
+    outcome_struct: str = ""
+    bars_held_struct: int = np.nan
     entry_idx: int = -1
     sweep_idx: int = -1
     flag_end_idx: int = -1
@@ -239,25 +247,37 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
     s.reward_R = round((pole_hi - entry) / (entry - stop), 2) if entry > stop else np.nan
     v20 = float(g["v20"].iloc[entry_idx])
     s.vol_x20 = round(float(g["volume"].iloc[entry_idx]) / v20, 2) if v20 > 0 else np.nan
+    s.entry_gt_prior_high = bool(entry > float(g["high"].iloc[entry_idx - 1]))
+    s.entry_gt_flush_high = bool(entry > float(g["high"].iloc[sh_low_idx])) if entry_idx > sh_low_idx else False
+    s.entry_vs_rail_pct = round((entry / rail - 1) * 100, 2) if np.isfinite(rail) else np.nan
 
     # ---- outcome (walk forward) — meaningful for historical setups
     s.status = "BUY" if last_only else "DONE"
     end = min(entry_idx + C.MAX_HOLD_BARS, n - 1)
-    outcome, Rr = "open", np.nan
-    for k in range(entry_idx + 1, end + 1):
-        lo, hi = float(g["low"].iloc[k]), float(g["high"].iloc[k])
-        if lo <= stop:                              # stop assumed first if both hit in one bar
-            outcome, Rr, exit_k = "stopped", -1.0, k
-            break
-        if hi >= pole_hi:
-            outcome, Rr, exit_k = "target", (pole_hi - entry) / (entry - stop), k
-            break
-    else:
-        exit_k = end
+
+    def _walk(structural: bool):
+        """Returns (outcome, R, exit bar). structural=True adds: a CLOSE below the
+        shakeout low invalidates the setup - the flush failed, this is a downtrend."""
+        for k in range(entry_idx + 1, end + 1):
+            lo, hi = float(g["low"].iloc[k]), float(g["high"].iloc[k])
+            if lo <= stop:                           # the resting stop fills first
+                return "stopped", -1.0, k
+            if structural and float(g["close"].iloc[k]) < sh_low:
+                # the flush has failed and the stop was not touched: the setup is void
+                return "invalidated", (float(g["close"].iloc[k]) - entry) / (entry - stop), k
+            if hi >= pole_hi:
+                return "target", (pole_hi - entry) / (entry - stop), k
         if n - 1 > entry_idx + C.MAX_HOLD_BARS:
-            outcome, Rr = "time", (float(g["close"].iloc[end]) - entry) / (entry - stop)
+            return "time", (float(g["close"].iloc[end]) - entry) / (entry - stop), end
+        return "open", np.nan, end
+
+    outcome, Rr, exit_k = _walk(False)
+    _so, _sR, _sk = _walk(True)
     if s.status == "DONE":
         s.outcome, s.R, s.bars_held = outcome, round(float(Rr), 2) if np.isfinite(Rr) else np.nan, int(exit_k - entry_idx)
+        s.outcome_struct = _so
+        s.R_struct = round(float(_sR), 2) if np.isfinite(_sR) else np.nan
+        s.bars_held_struct = int(_sk - entry_idx)
         h = min(entry_idx + C.MAX_HOLD_BARS, n - 1)
         fwd = g.iloc[entry_idx + 1:h + 1]
         if len(fwd):

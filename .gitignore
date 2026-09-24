@@ -6,7 +6,6 @@ uploads/
 crops/
 d/
 state/
-nse_scanner/state/
 intra_*.json
 raw_*.json
 events_*.csv
