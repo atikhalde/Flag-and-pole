@@ -211,6 +211,15 @@ def run(args) -> int:
     mcap_map = dict(zip(uni.symbol, uni.get("mcap_cr", [np.nan] * len(uni))))
 
     frames, states = stage1(uni, args.limit)
+    # the newest daily bar we actually have.  On 2026-09-24 Yahoo dropped the whole session from
+    # its daily series, so every detection silently ran on data through 09-23 - the kind of thing
+    # that must never be invisible.
+    data_through = "?"
+    try:
+        data_through = str(max(f.index[-1] for f in frames.values()))[:10] if frames else "no data"
+    except Exception:
+        pass
+    print(f"[data]   daily bars through {data_through}")
     shortlist = list(frames.keys())
     live = stage2_live_prices(shortlist)
     for k, v in live.items():
@@ -305,7 +314,7 @@ def run(args) -> int:
         items.sort(key=lambda x: {"REBASING": 0, "SWEPT": 0, "BUY": 1, "IN TRADE": 2,
                                   "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
         text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys),
-                         newly_closed=newly_closed, watch=watch)
+                         newly_closed=newly_closed, watch=watch, data_through=data_through)
         print(f"[digest] {len(items)} setup(s) on the board, {len(watch)} watchlist, {len(gated)} filtered out")
         if not args.no_telegram:
             digest_sent = TG.send(text)
@@ -318,12 +327,13 @@ def run(args) -> int:
           f"| {len(in_trade)} position(s) open | state saved")
 
     _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
-                 closed=closed, newly_closed=newly_closed, stats=stats, watch=watch)
+                 closed=closed, newly_closed=newly_closed, stats=stats, watch=watch,
+                 data_through=data_through)
     return 0
 
 
 def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
-                 closed=None, newly_closed=None, stats=None, watch=None):
+                 closed=None, newly_closed=None, stats=None, watch=None, data_through="?"):
     """Write the job summary shown on the Actions run page (GITHUB_STEP_SUMMARY)."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -331,6 +341,7 @@ def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, di
     L = ["## NSE flag scanner — run result", ""]
     L.append(f"**{mode}** · trigger `{C.TRIGGER_MODE}` · profile `{C.QUALITY_PROFILE}` · "
              f"volume cap {C.EXCLUDE_VOL_SPIKE_X}x · regime filter `{C.REGIME_FILTER}`")
+    L.append(f"daily bars through **{data_through}** (everything below is computed on data up to that bar)")
     L.append("")
     closed = closed or []
     newly_closed = newly_closed or []

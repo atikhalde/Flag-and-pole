@@ -119,6 +119,14 @@ jobs:
                   print("  -", b)
               sys.exit(1)
           print("all artifacts present:", ", ".join(need))
+          import pandas as _pd
+          t = _pd.read_csv("reports/backtest_trades.csv")
+          last = str(t.entry_date.max())[:10]
+          print(f"newest trade entry date in the data: {last}")
+          import datetime as _dt
+          age = (_dt.date.today() - _dt.date.fromisoformat(last)).days
+          if age > 7:
+              print(f"::warning::the newest daily bar is {age} days old - the vendor feed may be lagging")
           PYEOF
 
       - name: Show summary
