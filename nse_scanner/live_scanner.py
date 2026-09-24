@@ -220,13 +220,24 @@ def run(args) -> int:
     state = D.load_state()
     fired = state.setdefault("alerts", {})
 
-    buys = [r for r in results if r["status"] == "BUY" and not r.get("skip_reason")]
+    # ---- the watchlist is always shown.  These names still have to clear the gates to ALERT,
+    # but their verdict is printed on the board either way, so you can always see your own charts.
+    wl = set(D.load_watchlist())
+    watch = [r for r in results if r.get("symbol") in wl and r.get("skip_reason")
+             and not r.get("pos_state")]
+    for r in watch:
+        r["gate_note"] = r["skip_reason"]
+        r["skip_reason"] = None
+        r["watchlist_bypass"] = True
+
+    buys = [r for r in results if r["status"] == "BUY" and not r.get("skip_reason")
+            and not r.get("watchlist_bypass")]
     carried = [r for r in results if r.get("pos_state")]
     in_trade = [r for r in carried if r["pos_state"] == POS.OPEN]
     closed = [r for r in carried if r["pos_state"] != POS.OPEN]
     waiting = [r for r in results if r["status"] in ("SWEPT", "FLAG_READY", "COILING")
                and not r.get("skip_reason")]
-    gated = [r for r in results if r.get("skip_reason") and r not in carried]
+    gated = [r for r in results if r.get("skip_reason") and r not in carried and r not in watch]
     for r in in_trade:
         r["status"] = "IN TRADE"
     for r in closed:
@@ -243,6 +254,10 @@ def run(args) -> int:
             newly_closed.append(r)
     stats = POS.summarize(carried)
 
+    if watch:
+        print(f"[watch]  {len(watch)} watchlist name(s) shown with their gate verdict:")
+        for r in watch:
+            print(f"    ? {r['symbol']}: {r['gate_note']}")
     print(f"[result] {len(buys)} fresh BUY signal(s) | {len(in_trade)} open | "
           f"{len(closed)} closed since entry "
           f"({stats['stopped']} stopped, {stats['target']} target, {stats['expired']} timed out) | "
@@ -282,12 +297,12 @@ def run(args) -> int:
     if (confirmed or args.force_digest) and (state.get("digest_last") != today or args.force_digest) \
             and not args.no_digest:
         items = []
-        for r in waiting + buys + in_trade:
+        for r in waiting + buys + in_trade + watch:
             r["mcap_cr"] = mcap_map.get(r["symbol"])
             items.append(r)
         items.sort(key=lambda x: {"SWEPT": 0, "BUY": 1, "IN TRADE": 2, "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
         text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys),
-                         newly_closed=newly_closed)
+                         newly_closed=newly_closed, watch=watch)
         if not args.no_telegram:
             digest_sent = TG.send(text)
         else:
@@ -299,12 +314,12 @@ def run(args) -> int:
           f"| {len(in_trade)} position(s) open | state saved")
 
     _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
-                 closed=closed, newly_closed=newly_closed, stats=stats)
+                 closed=closed, newly_closed=newly_closed, stats=stats, watch=watch)
     return 0
 
 
 def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
-                 closed=None, newly_closed=None, stats=None):
+                 closed=None, newly_closed=None, stats=None, watch=None):
     """Write the job summary shown on the Actions run page (GITHUB_STEP_SUMMARY)."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
