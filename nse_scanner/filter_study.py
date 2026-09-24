@@ -120,6 +120,7 @@ def main():
     ap.add_argument("--mode", default="first_bullish")
     ap.add_argument("--out", default="reports")
     a = ap.parse_args()
+    os.makedirs(a.out, exist_ok=True)
 
     d = pd.read_csv(a.csv)
     d = d[d.trigger_mode == a.mode].dropna(subset=["R"]).copy()
@@ -129,8 +130,12 @@ def main():
     pd.set_option("display.width", 240)
     print(f"mode={a.mode}  trades={len(d)}   train(<{SPLIT})={ (d.entry_date<SPLIT).sum() }  "
           f"test(>={SPLIT})={ (d.entry_date>=SPLIT).sum() }")
-    print(f"baseline: train avgR {_stats(d[d.entry_date<SPLIT])['avgR']:+.3f} | "
-          f"test avgR {_stats(d[d.entry_date>=SPLIT])['avgR']:+.3f}")
+    # `baseline` was referenced later without ever being defined, so this script died with a
+    # NameError after printing its first lines - and the workflow had continue-on-error on, so
+    # the study silently produced nothing run after run.
+    baseline = dict(train=_stats(d[d.entry_date < SPLIT]), test=_stats(d[d.entry_date >= SPLIT]))
+    print(f"baseline: train avgR {baseline['train']['avgR']:+.3f} | "
+          f"test avgR {baseline['test']['avgR']:+.3f}")
 
     s = scan(d)
     if len(s):

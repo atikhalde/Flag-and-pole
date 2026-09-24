@@ -71,18 +71,18 @@ jobs:
             --trigger "${{ inputs.trigger }}" \
             --pdf --out reports
 
-      - name: Filter study (which conditions actually remove the false signals)
-        run: |
-          python3 -m nse_scanner.filter_study \
-            --csv reports/backtest_trades.csv \
-            --mode first_bullish \
-            --out reports
-        continue-on-error: true
-
       - name: The classic book (one entry per setup, no re-basing) for the gate statistics
         run: |
           REBASE_ON_NEW_LOW=0 python3 -m nse_scanner.backtest \
             --out reports/classic --trigger first_bullish --start 2016-01-01
+        continue-on-error: true
+
+      - name: Filter study (which conditions actually remove the false signals)
+        run: |
+          python3 -m nse_scanner.filter_study \
+            --csv reports/classic/backtest_trades.csv \
+            --mode first_bullish \
+            --out reports
         continue-on-error: true
 
       - name: Accuracy / returns / edge study (permutation test, same-risk benchmark)
@@ -96,6 +96,30 @@ jobs:
       - name: Rebuild summary + PDF from the CSV (picks up both studies, ~10 s)
         run: python3 -m nse_scanner.backtest --from-csv reports/backtest_trades.csv --out reports
         continue-on-error: true
+
+      - name: Verify the run produced its artifacts (a silent gap is a failure)
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys
+          need = ["reports/backtest_trades.csv", "reports/backtest_summary.json",
+                  "reports/backtest_report.pdf", "reports/filter_study.json",
+                  "reports/edge_study.json", "reports/classic/backtest_trades.csv"]
+          bad = [p for p in need if not os.path.exists(p) or os.path.getsize(p) < 500]
+          es = json.load(open("reports/edge_study.json")) if os.path.exists("reports/edge_study.json") else {}
+          if not es.get("classic_trades"):
+              bad.append("edge_study.json has no classic basis - the gate statistics would be invalid")
+          if not (es.get("returns", {}).get("equity_fixed")):
+              bad.append("edge_study.json has no fixed-risk equity block")
+          fs = json.load(open("reports/filter_study.json")) if os.path.exists("reports/filter_study.json") else {}
+          if not fs.get("baseline"):
+              bad.append("filter_study.json has no baseline - the study did not finish")
+          if bad:
+              print("MISSING OR EMPTY:")
+              for b in bad:
+                  print("  -", b)
+              sys.exit(1)
+          print("all artifacts present:", ", ".join(need))
+          PYEOF
 
       - name: Show summary
         run: |
