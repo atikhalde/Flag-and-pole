@@ -5,7 +5,7 @@ alld.pkl
 uploads/
 crops/
 d/
-state/
+/state/
 intra_*.json
 raw_*.json
 events_*.csv
