@@ -34,3 +34,7 @@ PR_BODY.md
 .gitconfig
 flag_and_pole.bundle
 patches/
+
+# never commit credentials, and not the bootstrap bundle either
+Token
+*.bundle
