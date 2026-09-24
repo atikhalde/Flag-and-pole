@@ -35,6 +35,15 @@ def fetch(sym):
                       "close": q["close"], "volume": q["volume"]}).dropna().set_index("date")
     return d
 
+# the shakeout SIGNATURE, measured on the two charts: volume expansion out of the quiet drift,
+# and a red falling structure.  NIACL and LAMBODHARA are the reference values.
+SIGNATURE = {
+    # symbol: (min leg volume vs 20d avg, min leg volume vs the drift's volume, max one-day drop %, min red fraction)
+    "NIACL":      (1.0, 3.0, -4.0, 0.5),
+    "LAMBODHARA": (1.0, 3.0, -8.0, 0.5),
+}
+
+
 def main():
     fails = 0
     for sym, ign, rail, sh_low, entry_date, tol in CASES:
@@ -45,24 +54,38 @@ def main():
             print(f"FAIL {sym}: no setup detected at the {ign} ignition"); fails += 1; continue
         s = hit[-1]
         checks = [("rail", s.rail, rail), ("shakeout low", s.sweep_low, sh_low)]
-        ok = True
+        good = True
         for name, got, want in checks:
-            good = abs(got - want) / want <= tol
-            ok &= good
-            print(f"  {'ok  ' if good else 'FAIL'} {sym} {name}: got {got}  expected ≈{want}")
-        good = str(s.entry_date)[:10] == entry_date
-        ok &= good
-        print(f"  {'ok  ' if good else 'FAIL'} {sym} entry date: got {str(s.entry_date)[:10]}  expected {entry_date}")
+            hit_ok = abs(got - want) / want <= tol
+            good &= hit_ok
+            print(f"  {'ok  ' if hit_ok else 'FAIL'} {sym} {name}: got {got}  expected ~{want}")
+        hit_ok = str(s.entry_date)[:10] == entry_date
+        good &= hit_ok
+        print(f"  {'ok  ' if hit_ok else 'FAIL'} {sym} entry date: got {str(s.entry_date)[:10]}  expected {entry_date}")
         print(f"       ({s.flag_bars} drift bars, ends {s.flag_end_date}, sweep {s.sweep_below_pct}% below rail, "
               f"risk {s.risk_pct}%, {s.reward_R}R, outcome {s.outcome or 'open'})")
-        if not ok:
+
+        # ---- the shakeout signature: volume + falling structure, not just depth ----
+        v_min, d_min, drop_max, red_min = SIGNATURE[sym]
+        sig = [("leg volume vs 20d avg", s.sweep_vol_x20, v_min, ">="),
+               ("leg volume vs the drift", s.sweep_vol_vs_drift, d_min, ">="),
+               ("worst red bar in the leg %", s.sweep_leg_pct, drop_max, "<="),
+               (f"red bars in the leg ({s.sweep_red}/{s.sweep_bars})", s.sweep_red_frac, red_min, ">=")]
+        for name, got, want, op in sig:
+            hit_ok = (got >= want) if op == ">=" else (got <= want)
+            good &= bool(hit_ok)
+            print(f"  {'ok  ' if hit_ok else 'FAIL'} {sym} shakeout {name}: got {got}  (needs {op} {want})")
+        if not good:
             fails += 1
         print()
     if fails:
-        print(f"{fails} exemplar(s) FAILED — the detector no longer matches the validated pattern.")
+        print(f"{fails} exemplar(s) FAILED - the detector no longer matches the validated pattern "
+              "(geometry OR the shakeout's volume / candle structure).")
         return 1
-    print("both exemplars pass — the detector matches the charts it was built from.")
+    print("both exemplars pass - the detector matches the charts it was built from, "
+          "including the shakeout's volume and falling-candle structure.")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

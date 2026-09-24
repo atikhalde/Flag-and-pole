@@ -43,6 +43,14 @@ class Setup:
     status: str = ""                   # "BUY" | "SWEPT" | "COILING" | "DONE" | "DEAD"
     bars_since_entry: int = np.nan
     vol_x20: float = np.nan            # volume on the trigger bar vs its 20-day average
+    # ---- the shakeout leg's own character (what the user's charts actually show) ----
+    sweep_bars: int = 0                # bars from the floor break to the shakeout low
+    sweep_red: int = 0                 # how many of them closed below their open (falling structure)
+    sweep_red_frac: float = np.nan     # sweep_red / sweep_bars
+    sweep_vol_x20: float = np.nan      # PEAK volume on the shakeout leg vs the 20-day average
+    sweep_vol_vs_drift: float = np.nan # that peak / the median volume of the quiet drift
+    sweep_close_pos: float = np.nan    # where the shakeout bar closed in its range (0 = on the low)
+    sweep_leg_pct: float = np.nan      # size of the shakeout's largest one-day drop (%)
     turnover_cr: float = np.nan
     # outcome fields (backtest only)
     outcome: str = ""
@@ -200,6 +208,24 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         return s if last_only else None
     s.sweep_idx, s.sweep_date, s.sweep_low = sweep, str(g.index[sh_low_idx].date()), round(sh_low, 2)
     s.sweep_below_pct = round((sh_low / rail - 1) * 100, 2)
+
+    # ---- characterise the shakeout leg: how many bars, how red, and how much volume ----
+    leg = g.iloc[sweep:sh_low_idx + 1]
+    if len(leg):
+        red = (leg["close"] < leg["open"]).sum()
+        lg_vx = (leg["volume"] / leg["v20"].replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+        dr_vx = (dr["volume"] / dr["v20"].replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+        s.sweep_bars = int(len(leg))
+        s.sweep_red = int(red)
+        s.sweep_red_frac = round(float(red) / len(leg), 2)
+        s.sweep_vol_x20 = round(float(np.nanmax(lg_vx.values)), 2) if np.isfinite(np.nanmax(lg_vx.values)) else np.nan
+        drift_med_vx = float(np.nanmedian(dr_vx.values)) if len(dr_vx) and np.isfinite(np.nanmedian(dr_vx.values)) else np.nan
+        s.sweep_vol_vs_drift = (round(s.sweep_vol_x20 / drift_med_vx, 2)
+                                if drift_med_vx and drift_med_vx > 0 and np.isfinite(s.sweep_vol_x20) else np.nan)
+        bar = g.iloc[sh_low_idx]
+        rng = float(bar["high"]) - float(bar["low"])
+        s.sweep_close_pos = round((float(bar["close"]) - float(bar["low"])) / rng, 2) if rng > 0 else np.nan
+        s.sweep_leg_pct = round(float(leg["ret"].min()) * 100, 2) if np.isfinite(leg["ret"].min()) else np.nan
     if entry_idx is None:
         s.status = "SWEPT"                                 # shakeout done, waiting for the reclaim
         return s if last_only else None

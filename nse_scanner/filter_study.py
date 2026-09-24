@@ -29,6 +29,10 @@ FEATURES = [
     ("turnover_cr",     "20-day average traded value (Rs cr)",       [0, 1, 5, 20, 100, 1e9]),
     ("atr",             "ATR in rupees",                             [0, 5, 15, 40, 100, 1e9]),
     ("rail_slope_pct",  "slope of the drift floor (%/bar)",          [-99, -0.5, -0.2, 0, 0.2, 99]),
+    ("sweep_vol_x20",   "volume on the shakeout leg vs its 20d avg",  [0, 0.5, 1.0, 2.0, 3.0, 999]),
+    ("sweep_vol_vs_drift", "shakeout volume vs the quiet drift's",    [0, 1.5, 3.0, 6.0, 999]),
+    ("sweep_leg_pct",   "worst single day inside the shakeout (%)",   [-99, -8, -6, -4, -2, 0]),
+    ("sweep_red_frac",  "share of red candles in the shakeout leg",   [0, 0.34, 0.5, 0.67, 0.99, 1.01]),
 ]
 # NOTE: bars_held / outcome / R / ret_horizon / mfe / mae are deliberately NOT here.
 # They are only known AFTER the trade and would leak the answer into the filter.
