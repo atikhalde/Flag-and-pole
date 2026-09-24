@@ -66,6 +66,20 @@ def alert_card(s: dict, kind: str) -> str:
 
 def status_card(s: dict) -> str:
     st = s["status"]
+    # an open position must show its levels and where it stands - that is the whole point of the digest
+    if st == "IN TRADE" and s.get("entry"):
+        risk = (s.get("entry") or 0) - (s.get("stop") or 0)
+        r_now = ((s.get("last_close") or 0) - (s.get("entry") or 0)) / risk if risk > 0 else None
+        return "\n".join([
+            f"<b>{_esc(s.get('shortName') or s['symbol'])}</b>  <code>{_esc(s['symbol'])}</code>",
+            "\U0001F535 in trade - entry already fired",
+            f"entry \u20b9{s['entry']}  ({s.get('entry_date')})",
+            f"stop  \u20b9{s['stop']}  (risk {s.get('risk_pct')}%)",
+            (f"last  \u20b9{s.get('last_close')}  \u2192 {r_now:+.2f}R" if r_now is not None else
+             (f"last  \u20b9{s.get('last_close')}" if s.get("last_close") else "")),
+            f"target \u20b9{s.get('target')}  (pole high)",
+            (f"{int(s['bars_since_entry'])} bars in" if s.get("bars_since_entry") is not None else ""),
+        ]).strip()
     head = {"SWEPT": "🟠 swept — waiting for the reclaim", "FLAG_READY": "🔵 flag built — waiting for the sweep",
             "COILING": "⚪ coiling", "BUY": "🟢 entry fired", "IN TRADE": "🔵 in trade (entry already fired)"}.get(st, st)
     return "\n".join([
@@ -78,11 +92,30 @@ def status_card(s: dict) -> str:
     ])
 
 
-def digest(items: list[dict], kind: str = "post-close") -> str:
+def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None,
+           fresh: int = None) -> str:
+    """Post-close digest: open positions, fresh triggers and the names filtered out today."""
+    gated = gated or []
+    n_pos = sum(1 for s in items if s.get("status") == "IN TRADE")
+    head = ["\U0001F4CA <b>NSE flag scanner - " + kind + "</b>"]
+    if fresh is not None:
+        head.append(f"{fresh} new trigger(s) / {len(items)} setup(s) on the board "
+                    f"({n_pos} position(s) already running)")
+    else:
+        head.append(f"{len(items)} live setup(s)")
+    head.append("")
+    out = ["\n".join(head)]
     if not items:
-        return f"📊 <b>NSE flag scanner — {kind}</b>\nNo live setups in the universe today."
-    out = [f"📊 <b>NSE flag scanner — {kind}</b>", f"{len(items)} live setup(s)", ""]
+        out.append("No live setups in the universe today.")
+        out.append("")
     for s in items[:40]:
         out.append(status_card(s))
         out.append("")
+    if gated:
+        out.append("<b>Filtered out today</b> (these would have alerted with QUALITY_PROFILE=off)")
+        for g in gated[:8]:
+            out.append("\u2022 <code>" + _esc(g.get("symbol")) + "</code> - " + _esc(g.get("skip_reason")))
+        out.append("")
+    if len(items) > 40:
+        out.append(f"...and {len(items)-40} more (full list in the Actions run summary).")
     return "\n".join(out)[:4000]

@@ -17,8 +17,21 @@ on:
         description: "cap the universe size (0 = full NSE list)"
         type: string
         default: "0"
+      profile:
+        description: "how selective the gates are — strict ≈ 1 signal / 3 weeks, balanced ≈ 1 / week, off = everything"
+        type: choice
+        default: balanced
+        options: [balanced, strict, off]
       dry_run:
         description: "print alerts to the log instead of sending them"
+        type: boolean
+        default: false
+      test_telegram:
+        description: "just send a one-line test message to Telegram and exit"
+        type: boolean
+        default: false
+      force_digest:
+        description: "send the digest even if one already went out today"
         type: boolean
         default: false
 
@@ -58,6 +71,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # QUALITY_PROFILE is read by nse_scanner/config.py; on a scheduled run this is empty
+          # and the repo default applies.
+          QUALITY_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || '' }}
         run: |
           ARGS=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -65,8 +81,11 @@ jobs:
             if [ "${{ inputs.mode }}" = "confirmed" ];   then ARGS="$ARGS --confirmed"; fi
             if [ "${{ inputs.limit }}" != "0" ];         then ARGS="$ARGS --limit ${{ inputs.limit }}"; fi
             if [ "${{ inputs.dry_run }}" = "true" ];     then ARGS="$ARGS --no-telegram"; fi
+            if [ "${{ inputs.force_digest }}" = "true" ]; then ARGS="$ARGS --force-digest"; fi
+            if [ "${{ inputs.test_telegram }}" = "true" ]; then ARGS="--test-telegram"; fi
           fi
           echo "flags:$ARGS"
+          echo "profile:${QUALITY_PROFILE:-<repo default>}"
           python3 -m nse_scanner.live_scanner $ARGS
 
       - name: Commit state (alert de-duplication) and universe
