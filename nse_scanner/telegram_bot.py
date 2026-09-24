@@ -83,8 +83,27 @@ def status_card(s: dict) -> str:
             f"target \u20b9{s.get('target')}  (pole high)",
             (f"{int(s['bars_since_entry'])} bars in" if s.get("bars_since_entry") is not None else ""),
         ]).strip()
+    # a fired entry MUST carry its date: without it the card reads as "fired today" even when
+    # the candle it belongs to is days old (the LAMBODHARA 2026-09-23 entry reported as today)
+    if st == "BUY":
+        bars = s.get("bars_since_entry")
+        age = ("" if bars is None or int(bars) <= 0
+               else f"  ({int(bars)} bar{'s' if int(bars) != 1 else ''} ago)")
+        risk = (s.get("entry") or 0) - (s.get("stop") or 0)
+        r_now = (((s.get("last_close") or 0) - (s.get("entry") or 0)) / risk) if risk > 0 else None
+        return "\n".join([
+            f"<b>{_esc(s.get('shortName') or s['symbol'])}</b>  <code>{_esc(s['symbol'])}</code>",
+            f"🟢 entry fired <b>{_esc(str(s.get('entry_date')))}</b>{age}",
+            f"entry ₹{s.get('entry')}   stop ₹{s.get('stop')}  (risk {s.get('risk_pct')}%)",
+            (f"last ₹{s.get('last_close')}  → {r_now:+.2f}R" if r_now is not None
+             else (f"last ₹{s.get('last_close')}" if s.get("last_close") else "")),
+            f"target ₹{s.get('target')}  (pole high)",
+            f"pole {s['pole_date']}  ₹{s['pole_low']} → ₹{s['pole_high']} (+{round(s['pole_gain']*100,1)}%)",
+            (f"rail ₹{s['rail']} · flag {s['flag_bars']} bars" if s.get("rail") else ""),
+            (f"sweep {s['sweep_date']} low ₹{s['sweep_low']}" if s.get("sweep_date") else ""),
+        ]).strip()
     head = {"SWEPT": "🟠 swept — waiting for the reclaim", "FLAG_READY": "🔵 flag built — waiting for the sweep",
-            "COILING": "⚪ coiling", "BUY": "🟢 entry fired", "IN TRADE": "🔵 in trade (entry already fired)"}.get(st, st)
+            "COILING": "⚪ coiling", "IN TRADE": "🔵 in trade (entry already fired)"}.get(st, st)
     return "\n".join([
         f"<b>{_esc(s['symbol'])}</b>",
         head,
@@ -118,11 +137,16 @@ def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None
         out.append(status_card(s))
         out.append("")
     if watch:
-        out.append("<b>Watchlist</b> (always shown - below the gate, so no alert was sent)")
+        out.append("<b>Watchlist</b> \u2014 always shown, below the gate, so no alert was sent")
         for w2 in watch[:8]:
-            out.append("\u2022 <code>" + _esc(w2.get("symbol")) + "</code> entry " +
-                       _esc(str(w2.get("entry_date"))) + " @ " + _esc(str(w2.get("entry"))) +
-                       " \u2014 " + _esc(w2.get("gate_note")))
+            risk = (w2.get("entry") or 0) - (w2.get("stop") or 0)
+            r_now = (((w2.get("last_close") or 0) - (w2.get("entry") or 0)) / risk) if risk > 0 else None
+            line = ("\u2022 <code>" + _esc(w2.get("symbol")) + "</code> entry <b>" +
+                    _esc(str(w2.get("entry_date"))) + "</b> @ " + _esc(str(w2.get("entry"))))
+            if r_now is not None:
+                line += f"  \u2192 {r_now:+.2f}R now"
+            line += "\n    gate: " + _esc(w2.get("gate_note"))
+            out.append(line)
         out.append("")
     if newly_closed:
         out.append("<b>Closed since the last digest</b> (no longer positions)")

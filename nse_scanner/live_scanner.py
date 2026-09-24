@@ -297,12 +297,13 @@ def run(args) -> int:
     if (confirmed or args.force_digest) and (state.get("digest_last") != today or args.force_digest) \
             and not args.no_digest:
         items = []
-        for r in waiting + buys + in_trade + watch:
+        for r in waiting + buys + in_trade:      # the watchlist has its own section below
             r["mcap_cr"] = mcap_map.get(r["symbol"])
             items.append(r)
         items.sort(key=lambda x: {"SWEPT": 0, "BUY": 1, "IN TRADE": 2, "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
         text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys),
                          newly_closed=newly_closed, watch=watch)
+        print(f"[digest] {len(items)} setup(s) on the board, {len(watch)} watchlist, {len(gated)} filtered out")
         if not args.no_telegram:
             digest_sent = TG.send(text)
         else:
