@@ -51,7 +51,12 @@
   "median_flag_bars": 18.0,
   "horizon_bars": 30
  },
- "_baseline": {},
+ "_baseline": {
+  "median_ret": 0.0102,
+  "avg_ret": 0.0313,
+  "win_rate": 0.5336,
+  "samples": 2381179
+ },
  "_evidence": {
   "by_year": [
    {
@@ -554,7 +559,7 @@
   "universe": "(from csv)",
   "start": "2016-01-01",
   "filters": "price>\u20b9100, mcap\u2265\u20b91000cr",
-  "generated": "2026-09-24 21:02:27",
+  "generated": "2026-09-24 21:07:49",
   "horizon": 30,
   "rule": "pole(\u22659.8% locked, 3x vol) \u2192 flag(\u226550% give-back, base intact) \u2192 sweep of flag low \u2192 close back above the rail; stop sweep-low \u2212 0.5ATR, target pole high, 60-bar time stop",
   "watchlist": [
