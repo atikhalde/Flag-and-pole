@@ -63,7 +63,7 @@ EXCLUDE_VOL_SPIKE_X = float(os.getenv("EXCLUDE_VOL_SPIKE_X", 3.0))
 #     volume 0.8-1.2x -> +0.51R | volume >3x -> -0.05R
 
 # ── quality profile, validated out-of-sample (train <2022 / test >=2022) ──
-QUALITY_PROFILE      = os.getenv("QUALITY_PROFILE", "volume")  # "off" | "balanced" | "strict" | "volume"
+QUALITY_PROFILE      = os.getenv("QUALITY_PROFILE", "edge")  # "off" | "balanced" | "strict" | "volume" | "edge"
 QUALITY_MIN_DRIFT    = int(os.getenv("QUALITY_MIN_DRIFT", 25))  # balanced=15, strict=25
 
 # ── THE SHAKEOUT SIGNATURE (profile "volume") ────────────────────────────────────────────
@@ -79,6 +79,21 @@ SWEEP_MIN_VOL_X20     = float(os.getenv("SWEEP_MIN_VOL_X20", 1.0))     # leg mus
 SWEEP_MIN_VOL_VS_DRIFT = float(os.getenv("SWEEP_MIN_VOL_VS_DRIFT", 3.0))  # ...and >= 3x the quiet drift's volume
 SWEEP_MIN_DROP_PCT    = float(os.getenv("SWEEP_MIN_DROP_PCT", 4.0))     # a red bar of at least this much
 SWEEP_MIN_RED_FRAC    = float(os.getenv("SWEEP_MIN_RED_FRAC", 0.5))     # more than half the leg must be red
+
+# ── THE EDGE, as measured (profile "edge" — the shipped default) ─────────────────────────
+# A permutation test (shuffle each feature across trades, re-apply the same threshold, 1000x)
+# asks which conditions are actually information rather than curve-fitting. On the test half:
+#     shakeout volume >= 3x the drift's   p = 0.028   <- the edge
+#     shakeout volume >= 1x its average   p = 0.059
+#     drift length >= 15 bars             p = 0.155
+#     red fall >= 4% in the leg           p = 0.381
+#     quiet reclaim (vol <= 2x)           p = 0.417
+#     more than half the leg red          p = 0.183
+# So the shipped rule keeps only three conditions: the one that is significant, plus the two
+# that keep appearing at the top of every subset ranking. Expectancy of the three together:
+#   n=255 (23/yr)  hit 42.7%  avgR +0.49  train +0.42 / test +0.54  ONE losing year in 11
+# The extra conditions left in from earlier versions do not survive the test, so they are gone.
+EDGE_MIN_DRIFT_BARS   = int(os.getenv("EDGE_MIN_DRIFT_BARS", 15))
 QUALITY_MIN_SWEEP    = float(os.getenv("QUALITY_MIN_SWEEP", 8.0))  # strict: shakeout >= 8% below the rail
 #   strict   : volume<=2x + drift>=25 + shakeout<=-8%  -> 149 trades | +0.51R | 42% win | median +2.9%
 #              train +0.54 / test +0.49   <- best expectancy, but the WHOLE universe only yields

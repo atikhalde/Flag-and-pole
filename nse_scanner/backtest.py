@@ -203,14 +203,18 @@ def evidence_tables(df: pd.DataFrame) -> dict:
     _strict = d[(d.vol_x20 <= 2.0) & (d.flag_bars >= C.QUALITY_MIN_DRIFT)
                 & (d.sweep_below_pct <= -C.QUALITY_MIN_SWEEP)]
     _balanced = d[(d.vol_x20 <= 2.0) & (d.flag_bars >= 15)]
+    _edge = d[(d.sweep_vol_vs_drift >= C.SWEEP_MIN_VOL_VS_DRIFT)
+              & (d.sweep_leg_pct <= -C.SWEEP_MIN_DROP_PCT)
+              & (d.flag_bars >= C.EDGE_MIN_DRIFT_BARS)]
     out["profiles"] = [dict(label="off - every signal", **_profile(d)),
                        dict(label="weak market only (NIFTY < 200-DMA)",
                             **_profile(d[d.nifty_bull == False])),
-                       dict(label="balanced - quiet reclaim, drift >= 15 bars", **_profile(_balanced)),
-                       dict(label=f"strict - quiet, drift >= {C.QUALITY_MIN_DRIFT}, "
-                                  f"shakeout >= {C.QUALITY_MIN_SWEEP:.0f}%", **_profile(_strict)),
-                       dict(label="volume - the shakeout must be a VOLUME event with a red fall "
-                                  "(the shipped default)", **_profile(_volume))]
+                       dict(label="balanced - quiet reclaim, drift >= 15", **_profile(_balanced)),
+                       dict(label=f"strict - quiet, drift >= {C.QUALITY_MIN_DRIFT}, sweep >= {C.QUALITY_MIN_SWEEP:.0f}%",
+                            **_profile(_strict)),
+                       dict(label="volume - shakeout volume + red fall", **_profile(_volume)),
+                       dict(label="edge - drift >= 15, shakeout vol >= 3x drift, red fall (DEFAULT)",
+                            **_profile(_edge))]
 
     out["by_reward"] = (d.assign(rb=pd.cut(d.reward_R, [0, 1, 1.5, 2, 3, 99],
                                            labels=["<1R", "1–1.5R", "1.5–2R", "2–3R", ">3R"]))
