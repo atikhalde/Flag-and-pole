@@ -78,6 +78,9 @@ class Setup:
     # and reclaims it 5 bars later (39 bars from the ignition of 2026-04-10), LAMBODHARA 10 bars
     # later (23 bars from 2026-08-24).  A "flag" that takes two months to shake out is not that
     # pattern - it is a stock drifting down, which is what the duration gates now reject. ----
+    rail_bars: int = -1                 # breakout (ignition) -> the shakeout's FIRST bar.  This is
+                                        # the rail's length in time: a long rail is a downtrend, not
+                                        # a shakeout, so it is capped (EDGE_MAX_RAIL_BARS).
     setup_bars: int = -1                # ignition bar -> entry bar, inclusive
     flush_bars: int = -1                # first bar under the rail -> entry bar, inclusive
 
@@ -155,6 +158,8 @@ def _voided_as_setup(g: pd.DataFrame, s: "Setup", a: int, b: int, stop_a: float,
     # are the values that were true when it fired - a later re-base must not rewrite them.
     if s.pole_idx >= 0:
         v.setup_bars = int(a - s.pole_idx + 1)
+    if s.pole_idx >= 0 and s.sweep_idx >= s.pole_idx:
+        v.rail_bars = int(s.sweep_idx - s.pole_idx + 1)   # fixed at detection, like the flush
     if flush_a is not None:
         v.flush_bars = int(flush_a)
     v.entry, v.stop, v.target = round(float(g["close"].iloc[a]), 2), round(float(stop_a), 2), s.pole_high
@@ -411,6 +416,10 @@ def _duration(s: "Setup", last_idx: int, entry_idx) -> None:
     still waiting for its trigger - so a watchlist name that has sprawled past the budget is
     already flagged instead of quietly being promoted later."""
     end = entry_idx if entry_idx is not None else last_idx
+    if s.pole_idx >= 0 and s.sweep_idx >= s.pole_idx:
+        # breakout -> shakeout.  Stamped from the rail break, not from the entry, so it answers the
+        # user's question directly: "from breakout to shakeout, how long did that take?"
+        s.rail_bars = int(s.sweep_idx - s.pole_idx + 1)
     if s.pole_idx >= 0 and end >= s.pole_idx:
         s.setup_bars = int(end - s.pole_idx + 1)
     if s.sweep_idx >= 0 and end >= s.sweep_idx:

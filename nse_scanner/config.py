@@ -130,14 +130,18 @@ SWEEP_MIN_RED_FRAC    = float(os.getenv("SWEEP_MIN_RED_FRAC", 0.5))     # more t
 #   n=255 (23/yr)  hit 42.7%  avgR +0.49  train +0.42 / test +0.54  ONE losing year in 11
 # The extra conditions left in from earlier versions do not survive the test, so they are gone.
 EDGE_MIN_DRIFT_BARS   = int(os.getenv("EDGE_MIN_DRIFT_BARS", 15))
-# ---- the setup's time budget: how long the whole thing may take, and how long it may stay under
-# the drift's floor.  Measured on the two source charts, which is where the numbers come from:
-# NIACL 39 bars from the ignition / 3 bars under the rail, LAMBODHARA 22 and 6.  The caps are those
-# numbers rounded up, and tightening them fails the exemplar test on purpose.  In the data 6 is also
-# the best of every threshold tested (edge profile: +0.49R at 255 signals -> +0.75R at 126).
-EDGE_MAX_SETUP_BARS   = int(os.getenv("EDGE_MAX_SETUP_BARS", 40))   # ignition -> entry, inclusive
+# ---- the formation's time budget.  The whole structure - breakout, then the rail (the sloping
+# drift), then the shakeout - has to happen in one compact window, because a rail that goes on for
+# months is not a shakeout, it is a downtrend.  Measured on the two source charts: NIACL breaks its
+# rail 37 bars after the 2026-04-10 breakout, LAMBODHARA 18 bars after 2026-08-24.  45 is the user's
+# limit and it is comfortable for both.  On the classic book, inside the edge profile, this window
+# gives 165 signals at +0.71R (out of sample +0.67R) against 126 at +0.75R (out of sample +0.63R) for
+# an arbitrary 40 - i.e. it is no worse and it keeps 39 more signals.
+EDGE_MAX_RAIL_BARS    = int(os.getenv("EDGE_MAX_RAIL_BARS", 45))    # breakout -> the shakeout's first bar
+# ...and the shakeout itself must be quick: it is a flush of the drift's floor, not a slide.
 EDGE_MAX_FLUSH_BARS   = int(os.getenv("EDGE_MAX_FLUSH_BARS", 6))    # first bar under the rail -> entry
-_ = EDGE_MAX_FLUSH_BARS
+# derived, not a separate rule: the entry cannot come later than the two limits allow
+EDGE_MAX_SETUP_BARS   = EDGE_MAX_RAIL_BARS + EDGE_MAX_FLUSH_BARS - 1   # breakout -> entry
 QUALITY_MIN_SWEEP    = float(os.getenv("QUALITY_MIN_SWEEP", 8.0))  # strict: shakeout >= 8% below the rail
 #   strict   : volume<=2x + drift>=25 + shakeout<=-8%  -> 149 trades | +0.51R | 42% win | median +2.9%
 #              train +0.54 / test +0.49   <- best expectancy, but the WHOLE universe only yields
