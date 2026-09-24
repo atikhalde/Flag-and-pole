@@ -385,7 +385,7 @@ def time_budget(c: pd.DataFrame, n_perm: int = 2000) -> dict:
         cap_rail_bars=C.EDGE_MAX_RAIL_BARS, cap_flush_bars=C.EDGE_MAX_FLUSH_BARS,
         base=_split(B), capped=_split(F), removed=_split(removed),
         p_within_profile=_p(B, cap[base]),
-        chart_bars=dict(niacl=dict(rail=37, flush=3), lambodhara=dict(rail=18, flush=6)),
+        chart_bars=dict(niacl=dict(rail=37, flush=3), lambodhara=dict(rail=17, flush=6)),
         note="the window is the user's rule and the two charts sit well inside it (NIACL 37 bars "
              "from breakout to shakeout / LAMBODHARA 18, against a limit of 45); "
              "tightening them fails nse_scanner.tests.test_exemplars")

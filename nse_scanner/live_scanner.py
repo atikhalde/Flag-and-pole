@@ -268,11 +268,16 @@ def run(args) -> int:
         if fb is not None and fb >= 0 and fb > C.EDGE_MAX_FLUSH_BARS:
             why.append(f"{fb} bars under the rail (> {C.EDGE_MAX_FLUSH_BARS})")
         return "; ".join(why)
-    invalid = [r for r in carried if _formation_broken(r)]
+    # only OPEN positions are demoted from the board.  A CLOSED trade stays in the book whatever
+    # its formation looked like - the money was made or lost and dropping it would flatter the
+    # account.  (Caught by auditing run #21: demoting closed rows silently cut the booked total
+    # from +18.4R to +12.5R.)
+    _carried_all = list(carried)
+    invalid = [r for r in _carried_all if r["pos_state"] == POS.OPEN and _formation_broken(r)]
     for r in invalid:
         r["not_a_setup"] = _formation_broken(r)
         r["status"] = "NOT THE PATTERN"
-    carried = [r for r in carried if r not in invalid]
+    carried = [r for r in _carried_all if r not in invalid]
     in_trade = [r for r in carried if r["pos_state"] == POS.OPEN]
     closed = [r for r in carried if r["pos_state"] != POS.OPEN]
     # REBASING belongs here: its earlier trigger was voided (the flush failed) and it is
@@ -294,7 +299,7 @@ def run(args) -> int:
         if k not in closed_log:
             closed_log[k] = now.isoformat()
             newly_closed.append(r)
-    stats = POS.summarize(carried)
+    stats = POS.summarize(_carried_all)   # the book reconciles: nothing is dropped from it
 
     if watch:
         print(f"[watch]  {len(watch)} watchlist name(s) shown with their gate verdict:")
