@@ -257,7 +257,7 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
         if float(g["low"].iloc[k]) < sh_low:
             sh_low, sh_low_idx = float(g["low"].iloc[k]), k
         if _is_trigger(k):
-            entry_idx, flush_at = k, int(sh_low_idx - sweep + 1) + int(k - sweep)
+            entry_idx, flush_at = k, int(k - sweep + 1)
             break
 
     # ---- RE-BASE: a trigger that is later undercut and closed below was a bounce inside the
@@ -280,7 +280,7 @@ def _build_setup(g: pd.DataFrame, symbol: str, i: int, last_only: bool) -> Setup
             if float(g["low"].iloc[k]) < sh_low:
                 sh_low, sh_low_idx = float(g["low"].iloc[k]), k
             if _is_trigger(k):
-                nxt, flush_next = k, int(sh_low_idx - sweep + 1) + int(k - sweep)
+                nxt, flush_next = k, int(k - sweep + 1)
                 break
         _seg = g["low"].iloc[entry_idx:inval + 1]
         if float(_seg.min()) < sh_low:
@@ -414,7 +414,10 @@ def _duration(s: "Setup", last_idx: int, entry_idx) -> None:
     if s.pole_idx >= 0 and end >= s.pole_idx:
         s.setup_bars = int(end - s.pole_idx + 1)
     if s.sweep_idx >= 0 and end >= s.sweep_idx:
-        s.flush_bars = int(int(s.sweep_bars) + (end - s.sweep_idx))
+        # bars from the first bar under the rail THROUGH the entry bar.  (An earlier version added
+        # sweep_bars as well, which double-counted the submersion: NIACL came out as 5 when it is
+        # 3 bars under the rail - 2026-06-02, 06-03, and the reclaim bar itself on 06-04.)
+        s.flush_bars = int(end - s.sweep_idx + 1)
 
 
 def setups_to_frame(setups: list[Setup]) -> pd.DataFrame:

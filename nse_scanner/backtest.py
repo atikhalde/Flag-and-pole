@@ -214,7 +214,7 @@ def evidence_tables(df: pd.DataFrame) -> dict:
               # which carry their own frozen values.  Falls back to the bar indices for old CSVs.
               & (pd.to_numeric(_dur_col(d, "setup_bars", d.entry_idx - d.pole_idx + 1),
                                errors="coerce").between(0, C.EDGE_MAX_SETUP_BARS))
-              & (pd.to_numeric(_dur_col(d, "flush_bars", d.sweep_bars + (d.entry_idx - d.sweep_idx)),
+              & (pd.to_numeric(_dur_col(d, "flush_bars", d.entry_idx - d.sweep_idx + 1),
                                errors="coerce").between(0, C.EDGE_MAX_FLUSH_BARS))]
     out["profiles"] = [dict(label="off - every signal", **_profile(d)),
                        dict(label="weak market only (NIFTY < 200DMA)",

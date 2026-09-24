@@ -152,7 +152,7 @@ def evaluate_live(frames: dict, live: dict, confirmed: bool, regime: dict = None
                                    f"(> {C.EDGE_MAX_SETUP_BARS} - NIACL took 39, LAMBODHARA 23)")
                 if st.flush_bars >= 0 and st.flush_bars > C.EDGE_MAX_FLUSH_BARS:
                     reasons.append(f"spent {st.flush_bars} bars below the rail before reclaiming it "
-                                   f"(> {C.EDGE_MAX_FLUSH_BARS} - NIACL took 5, LAMBODHARA 10)")
+                                   f"(> {C.EDGE_MAX_FLUSH_BARS} - NIACL took 3, LAMBODHARA 6)")
             elif C.QUALITY_PROFILE == "volume":
                 # the shakeout must be a volume event with a red, falling structure, and the
                 # reclaim must be quiet - this is the signature the two source charts show

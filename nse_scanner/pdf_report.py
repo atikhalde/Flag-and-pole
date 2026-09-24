@@ -482,7 +482,7 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                 f"{_fmt(b.get('avgR'), b.get('n'))} becomes {_fmt(f.get('avgR'), f.get('n'))} with the budget "
                 f"applied ({f.get('train') if f.get('train') is not None else float('nan'):+.2f}R before 2022, "
                 f"{f.get('test') if f.get('test') is not None else float('nan'):+.2f}R after, hit rate "
-                f"{100*(f.get('win') or 0):.0f}%). The "
+                f"{100*(f.get('win') or 0):.0f}%). "
                 f"<b>Of them, the {rm.get('n')} it removes still earn "
                 f"{(rm.get('avgR') if rm.get('avgR') is not None else float('nan')):+.2f}R, but on a "
                 f"{100*(rm.get('win') or 0):.0f}% win rate</b> - they are the weaker copies of the pattern, "
