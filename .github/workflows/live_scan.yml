@@ -1,0 +1,81 @@
+name: Live flag scanner (Telegram alerts)
+
+# Every 15 minutes between 08:30 and 16:15 IST, Mon–Fri.
+# GitHub cron is UTC: 3:00–10:45 UTC == 08:30–16:15 IST.
+# The run that starts at/after 15:35 IST is automatically the "confirmed close" run.
+on:
+  schedule:
+    - cron: "*/15 3-10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "auto = provisional intraday + confirmed after 15:35 IST"
+        type: choice
+        default: auto
+        options: [auto, provisional, confirmed]
+      limit:
+        description: "cap the universe size (0 = full NSE list)"
+        type: string
+        default: "0"
+      dry_run:
+        description: "print alerts to the log instead of sending them"
+        type: boolean
+        default: false
+
+concurrency:
+  group: live-flag-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r nse_scanner/requirements.txt
+
+      - name: Refresh NSE universe + market caps (keeps the ₹1000cr filter current)
+        run: python3 -m nse_scanner.refresh_universe
+        continue-on-error: true
+
+      - name: Run live scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.mode }}" = "provisional" ]; then ARGS="$ARGS --force-provisional"; fi
+            if [ "${{ inputs.mode }}" = "confirmed" ];   then ARGS="$ARGS --confirmed"; fi
+            if [ "${{ inputs.limit }}" != "0" ];         then ARGS="$ARGS --limit ${{ inputs.limit }}"; fi
+            if [ "${{ inputs.dry_run }}" = "true" ];     then ARGS="$ARGS --no-telegram"; fi
+          fi
+          echo "flags:$ARGS"
+          python3 -m nse_scanner.live_scanner $ARGS
+
+      - name: Commit state (alert de-duplication) and universe
+        run: |
+          git config user.name  "flags-scanner-bot"
+          git config user.email "flags-scanner-bot@users.noreply.github.com"
+          git add nse_scanner/state nse_scanner/universe 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "scanner state $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            for i in 1 2 3; do
+              git pull --rebase --autostash origin ${GITHUB_REF_NAME} && git push && break
+              echo "push attempt $i failed, retrying…"; sleep 5
+            done
+          fi

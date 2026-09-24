@@ -1,0 +1,27 @@
+# ---- analysis scratch (kept locally, not part of the scanner) ----
+alld.pkl
+*.pkl
+*.npy
+uploads/
+crops/
+d/
+state/
+nse_scanner/state/
+intra_*.json
+raw_*.json
+events_*.csv
+entry_bakeoff*.csv
+flag_bakeoff.csv
+f1_trade_sim.csv
+setups_anatomy.csv
+early_entries.csv
+flag_scanner_output.csv
+make_chart.py
+make_flag_chart.py
+scanner.py
+flag_scanner.py
+*.pyc
+__pycache__/
+.venv/
+.cache/
+.ipynb_checkpoints/
