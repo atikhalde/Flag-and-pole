@@ -1,0 +1,40 @@
+# ---- analysis scratch (kept locally, not part of the scanner) ----
+alld.pkl
+*.pkl
+*.npy
+uploads/
+crops/
+d/
+state/
+nse_scanner/state/
+intra_*.json
+raw_*.json
+events_*.csv
+entry_bakeoff*.csv
+flag_bakeoff.csv
+f1_trade_sim.csv
+setups_anatomy.csv
+early_entries.csv
+flag_scanner_output.csv
+make_chart.py
+make_flag_chart.py
+scanner.py
+flag_scanner.py
+*.pyc
+__pycache__/
+.venv/
+.cache/
+.ipynb_checkpoints/
+
+# local push helpers, not part of the project
+PUSH_INSTRUCTIONS.md
+PR_BODY.md
+
+# push helpers
+.gitconfig
+flag_and_pole.bundle
+patches/
+
+# never commit credentials, and not the bootstrap bundle either
+Token
+*.bundle
