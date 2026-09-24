@@ -79,7 +79,14 @@ jobs:
             --out reports
         continue-on-error: true
 
-      - name: Rebuild summary + PDF from the CSV (picks up the filter study, ~5 s)
+      - name: Accuracy / returns / edge study (permutation test, risk-matched benchmark)
+        run: |
+          python3 -m nse_scanner.edge_study \
+            --csv reports/backtest_trades.csv \
+            --out reports --n-boot 5000 --n-perm 1000
+        continue-on-error: true
+
+      - name: Rebuild summary + PDF from the CSV (picks up both studies, ~10 s)
         run: python3 -m nse_scanner.backtest --from-csv reports/backtest_trades.csv --out reports
         continue-on-error: true
 
@@ -99,6 +106,7 @@ jobs:
             reports/backtest_summary.json
             reports/filter_scan.csv
             reports/filter_study.json
+            reports/edge_study.json
           retention-days: 90
 
       - name: Commit PDF + trades
