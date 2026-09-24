@@ -1,8 +1,14 @@
 name: Backtest report (PDF)
 
-# Manual run from the Actions tab. Produces backtest_report.pdf + CSVs and
-# uploads them as a downloadable artifact (and commits the PDF to reports/).
+# Manual run from the Actions tab (Actions -> "Backtest report (PDF)" -> Run workflow).
+# Produces backtest_report.pdf + CSVs and uploads them as a downloadable artifact
+# (and commits the PDF to reports/).
+#
+# It can also run on a schedule: uncomment the two lines below to get a fresh PDF on the
+# 1st of every month at 02:30 UTC. A scheduled run uses the input defaults.
 on:
+  # schedule:
+  #   - cron: "30 2 1 * *"
   workflow_dispatch:
     inputs:
       start:
@@ -51,6 +57,9 @@ jobs:
         run: python3 -m nse_scanner.refresh_universe
         continue-on-error: true
 
+      - name: Validate the detector against the two source charts
+        run: python3 -m nse_scanner.tests.test_exemplars
+
       - name: Run backtest + build PDF
         env:
           BACKTEST_START: ${{ inputs.start }}
@@ -61,6 +70,18 @@ jobs:
             --start "${{ inputs.start }}" \
             --trigger "${{ inputs.trigger }}" \
             --pdf --out reports
+
+      - name: Filter study (which conditions actually remove the false signals)
+        run: |
+          python3 -m nse_scanner.filter_study \
+            --csv reports/backtest_trades.csv \
+            --mode first_bullish \
+            --out reports
+        continue-on-error: true
+
+      - name: Rebuild summary + PDF from the CSV (picks up the filter study, ~5 s)
+        run: python3 -m nse_scanner.backtest --from-csv reports/backtest_trades.csv --out reports
+        continue-on-error: true
 
       - name: Show summary
         run: |
@@ -74,7 +95,10 @@ jobs:
           path: |
             reports/backtest_report.pdf
             reports/backtest_trades.csv
+            reports/backtest_open_trades.csv
             reports/backtest_summary.json
+            reports/filter_scan.csv
+            reports/filter_study.json
           retention-days: 90
 
       - name: Commit PDF + trades

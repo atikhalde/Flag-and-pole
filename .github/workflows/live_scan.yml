@@ -50,6 +50,10 @@ jobs:
         run: python3 -m nse_scanner.refresh_universe
         continue-on-error: true
 
+      - name: Validate the detector against the two source charts (warning only)
+        run: python3 -m nse_scanner.tests.test_exemplars
+        continue-on-error: true
+
       - name: Run live scanner
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

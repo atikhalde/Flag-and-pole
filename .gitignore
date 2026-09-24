@@ -25,3 +25,12 @@ __pycache__/
 .venv/
 .cache/
 .ipynb_checkpoints/
+
+# local push helpers, not part of the project
+PUSH_INSTRUCTIONS.md
+PR_BODY.md
+
+# push helpers
+.gitconfig
+flag_and_pole.bundle
+patches/
