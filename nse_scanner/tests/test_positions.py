@@ -87,6 +87,25 @@ def main() -> int:
         check(info["state"] == POS.OPEN and info["now_R"] >= -1.0,
               f"LAMBODHARA is OPEN and never shown below -1R (got {info['state']} {info['now_R']:+.2f}R)")
 
+    # ---- CASE 3: the digest card for a fired entry must print the date it fired.
+    # Reported: LAMBODHARA's 2026-09-23 entry was displayed as "entry fired" with no date and
+    # read as if it had fired the day of the digest.
+    from nse_scanner import telegram_bot as TG
+    card = TG.status_card(dict(status="BUY", symbol="LAMBODHARA.NS", shortName="LAMBODHARA TEXTILES",
+                               entry_date="2026-09-23", entry=119.93, stop=112.21, risk_pct=6.44,
+                               last_close=139.46, target=147.19, bars_since_entry=1,
+                               pole_date="2026-08-24", pole_low=105.5, pole_high=147.19, pole_gain=0.395,
+                               rail=127.37, flag_bars=13, sweep_date="2026-09-22", sweep_low=115.57))
+    check("2026-09-23" in card, "the entry card prints the date the entry fired (no date = 'fired today')")
+    check("entry ₹119.93" in card, "the entry card prints the entry price")
+
+    # ---- CASE 4: a watchlist name may not be listed twice (once as a signal, once as watchlist)
+    w = [dict(symbol="LAMBODHARA.NS", entry_date="2026-09-23", entry=119.93, stop=112.21,
+              last_close=139.46, gate_note="drift only 13 bars < 15")]
+    d = TG.digest([], "post-close digest", fresh=0, watch=w)
+    check(d.count("LAMBODHARA.NS") == 1, f"a watchlist name appears exactly once in the digest "
+                                          f"(found {d.count('LAMBODHARA.NS')})")
+
     print()
     if FAILS:
         print(f"  {len(FAILS)} FAILED - do not ship this detector")
