@@ -129,6 +129,9 @@ def equity_curve(d: pd.DataFrame, risk_frac: float = 0.005, cost_R: float = 0.0,
                 years=round(span, 2))
 
 
+FIXED_RISK_LEVELS = (0.005, 0.01, 0.02)     # 0.5%, 1%, 2% of capital risked per trade
+
+
 def returns(d: pd.DataFrame, bench: dict = None) -> dict:
     out = {}
     x = d.dropna(subset=["R"])
@@ -136,6 +139,12 @@ def returns(d: pd.DataFrame, bench: dict = None) -> dict:
         avg=round(float(x.ret_horizon.mean()), 4), median=round(float(x.ret_horizon.median()), 4),
         win=round(float((x.ret_horizon > 0).mean()), 4))
     out["equity"] = [equity_curve(d, 0.005, c) for c in (0.0, 0.1, 0.25, 0.5)]
+    # what a real account would run, at position sizes a real account could take, costs deducted.
+    # These are the numbers worth quoting - not a risk-per-trade scaled to force a drawdown match.
+    # equity_fixed is filled in by build() on the GATED book (the shipped rule); the cost sweep
+    # above stays on every signal, which is what that paragraph is about.
+    out["equity_fixed"] = []
+    out["equity_fixed_ungated"] = [equity_curve(d, r, 0.10) for r in FIXED_RISK_LEVELS]
     out["equity_at_1pct_risk"] = equity_curve(d, 0.01, 0.0)
     out["benchmark"] = bench or {}
     return out
@@ -317,18 +326,23 @@ def candidate_compare(d: pd.DataFrame) -> list[dict]:
     return rows
 
 
+CAP_RISK = 0.02            # never model more than 2% of capital risked on one trade
+
+
 def risk_matched(d: pd.DataFrame, target_dd: float = 0.384, cost_R: float = 0.10) -> dict:
     """Scale the risk per trade until the drawdown matches the benchmark's, then compare CAGR.
 
     Comparing a 0.5%-risk book against a 100%-invested index is meaningless; this makes the
     two portfolios carry the same risk.
     """
-    lo, hi, best = 0.001, 0.15, None
+    # Scaling a book with a very high expectancy to the index's drawdown produces absurd
+    # position sizes (4% risk per trade) and therefore absurd CAGRs.  Cap the search at a
+    # position size a real account could actually run, and say so when the cap binds.
+    lo, hi, best = 0.001, CAP_RISK, None
     for _ in range(40):
         mid = (lo + hi) / 2
         e = equity_curve(d, mid, cost_R)
         if e["max_dd"] < target_dd:
-            lo = best = mid if best is not None else mid
             best = mid
             lo = mid
         else:
@@ -336,40 +350,71 @@ def risk_matched(d: pd.DataFrame, target_dd: float = 0.384, cost_R: float = 0.10
     if best is None:
         return {}
     e = equity_curve(d, best, cost_R)
+    capped = abs(best - CAP_RISK) < 1e-9 and e["max_dd"] < target_dd - 0.02
     return dict(target_dd=target_dd, risk_per_trade=round(best * 100, 2), cagr=round(e["cagr"], 4),
                 max_dd=round(e["max_dd"], 3), sharpe=e["sharpe"], final=round(e["final"], 0),
-                total_return=round(e["total_return"], 3), cost_R=cost_R)
+                total_return=round(e["total_return"], 3), cost_R=cost_R, capped=bool(capped))
 
 
-def build(d: pd.DataFrame, args) -> dict:
+def build(d: pd.DataFrame, args, classic: pd.DataFrame = None) -> dict:
+    # d is the book the IMPLEMENTED rule produces: every voided trigger is a closed trade, so it
+    # is the only honest basis for RETURNS.  It is the wrong basis for asking whether a gate
+    # predicts anything, because ~80% of its rows are voids the gates helped cause.  Gate
+    # questions are answered on `c` - one entry per setup, the classic book.
     d = d[d.trigger_mode == MODE].dropna(subset=["R"]).copy()
     d["entry_date"] = d.entry_date.astype(str)
     d["nifty_bull"] = d.nifty_bull.map({True: 1, False: 0, "True": 1, "False": 0, 1: 1, 0: 0})
-    rep = dict(trigger=MODE, split=SPLIT, trades=int(len(d)))
-    print(f"mode={MODE}  trades={len(d)}  train(<{SPLIT})={int((d.entry_date < SPLIT).sum())} "
-          f"test(>={SPLIT})={int((d.entry_date >= SPLIT).sum())}\n")
-    rep["accuracy"] = accuracy(d)
+    c = classic
+    if c is None:
+        c = d
+        print("!! no --classic-csv given: gate statistics fall back to the void-inclusive book,")
+        print("!! which is the wrong basis for them.  Pass --classic-csv for a valid study.")
+    c = c[c.trigger_mode == MODE].dropna(subset=["R"]).copy()
+    c["entry_date"] = c.entry_date.astype(str)
+    if "nifty_bull" in c.columns:
+        c["nifty_bull"] = c.nifty_bull.map({True: 1, False: 0, "True": 1, "False": 0, 1: 1, 0: 0})
+    rep = dict(trigger=MODE, split=SPLIT, trades=int(len(d)), classic_trades=int(len(c)),
+               basis=dict(
+                   returns="the implemented rule: one row per trigger, VOIDED triggers counted as "
+                           "closed trades (this is what the account would experience)",
+                   gates="the classic book: one entry per setup, no re-basing - each setup "
+                         "contributes one independent entry decision"))
+    print(f"mode={MODE}\n"
+          f"  RETURNS basis : {len(d)} rows (the implemented rule, voided triggers counted as closed)\n"
+          f"  GATE basis    : {len(c)} rows (one entry per setup)  train(<{SPLIT})="
+          f"{int((c.entry_date < SPLIT).sum())}  test(>={SPLIT})={int((c.entry_date >= SPLIT).sum())}\n")
+    rep["accuracy"] = accuracy(c)
+    rep["void_accounting"] = dict(
+        triggered=int(len(c)), voided=int((d.outcome == "voided").sum()),
+        total_rows=int(len(d)),
+        note="every entry that the re-base rule voids is closed at that close and counted, so the "
+             "implemented rule pays for its own churn; it is NOT free to wait for a cleaner entry")
     rep["returns"] = returns(d, nifty_benchmark())
-    rep["ablation"] = ablation(d)
-    rep["subset_search"] = subset_search(d)
+    rep["ablation"] = ablation(c)
+    rep["subset_search"] = subset_search(c)
     rep["candidate_compare"] = candidate_compare(d)
-    gm = gate_masks(d)
-    _edge = pd.Series(True, index=d.index)
-    for c in CANDIDATES["edge (3) - SHIPPED"]:
-        _edge &= gm[c]
+    def edge_mask(frame):
+        m = pd.Series(True, index=frame.index)
+        for _cond in CANDIDATES["edge (3) - SHIPPED"]:   # NB: not `c` - it would clobber the
+            m &= gate_masks(frame)[_cond]                # classic-book frame
+        return m
+    _gated = d[edge_mask(d)]                             # mask built ON d, never borrowed
+    rep["returns"]["equity_fixed"] = [equity_curve(_gated, r, 0.10) for r in FIXED_RISK_LEVELS]
+    rep["returns"]["equity_fixed_note"] = (f"the shipped rule (edge gates) on the implemented book: "
+                                           f"{len(_gated)} trades")
     rep["risk_matched"] = dict(
-        edge3=risk_matched(d[_edge]),
+        edge3=risk_matched(_gated),
         all_signals=risk_matched(d),
     )
-    rep["walk_forward"] = walk_forward(d)
-    rep["bootstrap"] = bootstrap_ci(d, args.n_boot)
+    rep["walk_forward"] = walk_forward(c)
+    rep["bootstrap"] = bootstrap_ci(c, args.n_boot)
     rep["permutation"] = [
-        permutation_test(d, "sweep_vol_vs_drift", C.SWEEP_MIN_VOL_VS_DRIFT, ">=", args.n_perm),
-        permutation_test(d, "sweep_vol_x20", C.SWEEP_MIN_VOL_X20, ">=", args.n_perm),
-        permutation_test(d, "sweep_leg_pct", -C.SWEEP_MIN_DROP_PCT, "<=", args.n_perm),
-        permutation_test(d, "sweep_red_frac", C.SWEEP_MIN_RED_FRAC, ">=", args.n_perm),
-        permutation_test(d, "vol_x20", 2.0, "<=", args.n_perm),
-        permutation_test(d, "flag_bars", 15.0, ">=", args.n_perm),
+        permutation_test(c, "sweep_vol_vs_drift", C.SWEEP_MIN_VOL_VS_DRIFT, ">=", args.n_perm),
+        permutation_test(c, "sweep_vol_x20", C.SWEEP_MIN_VOL_X20, ">=", args.n_perm),
+        permutation_test(c, "sweep_leg_pct", -C.SWEEP_MIN_DROP_PCT, "<=", args.n_perm),
+        permutation_test(c, "sweep_red_frac", C.SWEEP_MIN_RED_FRAC, ">=", args.n_perm),
+        permutation_test(c, "vol_x20", 2.0, "<=", args.n_perm),
+        permutation_test(c, "flag_bars", 15.0, ">=", args.n_perm),
     ]
 
     # ---------------- print
@@ -465,11 +510,15 @@ def main():
     ap.add_argument("--mode", default=MODE)
     ap.add_argument("--n-boot", type=int, default=5000)
     ap.add_argument("--n-perm", type=int, default=1000)
+    ap.add_argument("--classic-csv", default=None,
+                    help="the one-entry-per-setup book (REBASE_ON_NEW_LOW=0).  Gate statistics and "
+                         "the permutation test are computed on this; returns on --csv.")
     a = ap.parse_args()
     globals()["MODE"] = a.mode
     os.makedirs(a.out, exist_ok=True)
     d = pd.read_csv(a.csv)
-    rep = build(d, a)
+    classic = pd.read_csv(a.classic_csv) if a.classic_csv else None
+    rep = build(d, a, classic)
     json.dump(rep, open(f"{a.out}/edge_study.json", "w"), indent=1, default=str)
     print(f"\nwrote {a.out}/edge_study.json")
     return 0
