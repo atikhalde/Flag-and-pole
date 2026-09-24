@@ -466,6 +466,29 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                     f"half), but it is an independent confirmation of the same idea: the reclaim candle and the length "
                     f"of the drift carry the information, and chasing more conditions just fits noise. "
                     f"Bucket-by-bucket output: <font face='Courier'>reports/filter_scan.csv</font>.", SMALL))
+                # the study's own headline: the kept / dropped split, which is the actual answer to
+                # "which conditions remove the false signals".  Before this, the section only quoted the
+                # single best bucket and threw the headline away.
+                _kept, _drop = _st.get("kept") or {}, _st.get("dropped") or {}
+                _kt2, _dt2 = _st.get("kept_test") or {}, _st.get("dropped_test") or {}
+                _sig = _st.get("signals") or (_kept.get("n", 0) + _drop.get("n", 0))
+                if _kept and _drop and _sig:
+                    _kp = 100.0 * _kept.get("n", 0) / _sig
+                    _dp = 100.0 * _drop.get("n", 0) / _sig
+                    _ratio = (_kept.get("avgR") or 0) / (_drop.get("avgR") or 1e-9)
+                    F.append(Paragraph(
+                        f"<b>The headline of that study:</b> of the {_sig:,} signals it scored, the rule keeps "
+                        f"<b>{_kept.get('n', 0):,} ({_kp:.0f}%)</b> averaging <b>{_kept.get('avgR', 0):+.2f}R</b> with a "
+                        f"{(_kept.get('win') or 0)*100:.0f}% win rate and a median {C.RET_HORIZON}-bar return of "
+                        f"{_pct(_kept.get('med30'))}, and discards <b>{_drop.get('n', 0):,} ({_dp:.0f}%)</b> averaging "
+                        f"{_drop.get('avgR', 0):+.2f}R at {(_drop.get('win') or 0)*100:.0f}% with a median "
+                        f"{_pct(_drop.get('med30'))}. That is <b>{_ratio:.1f}x the expectancy from {_kp:.0f}% of the "
+                        f"signals</b> - and it is not a train-half artefact: out of sample (split {_st.get('split')}) "
+                        f"the kept trades earn {_kt2.get('avgR', float('nan')):+.2f}R (n={_kt2.get('n')}) against "
+                        f"{_dt2.get('avgR', float('nan')):+.2f}R (n={_dt2.get('n')}) for the discarded ones.", SMALL))
+                else:
+                    F.append(Paragraph(
+                        "Bucket-by-bucket output: <font face='Courier'>reports/filter_scan.csv</font>.", SMALL))
         except Exception as _e:
             pass
 

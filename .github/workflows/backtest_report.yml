@@ -113,6 +113,14 @@ jobs:
           fs = json.load(open("reports/filter_study.json")) if os.path.exists("reports/filter_study.json") else {}
           if not fs.get("baseline"):
               bad.append("filter_study.json has no baseline - the study did not finish")
+          # the rebuild step is allowed to fail (so a broken report still leaves artifacts), which means
+          # a silently stale PDF would otherwise pass every check above.  A PDF older than the studies it
+          # is supposed to contain is a failed report, not a passing one.
+          import os as _os
+          _pdf = "reports/backtest_report.pdf"
+          for _dep in ("reports/filter_study.json", "reports/edge_study.json"):
+              if _os.path.getmtime(_pdf) < _os.path.getmtime(_dep):
+                  bad.append(f"{_pdf} is older than {_dep} - the rebuild never picked the study up")
           if bad:
               print("MISSING OR EMPTY:")
               for b in bad:

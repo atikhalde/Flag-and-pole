@@ -559,7 +559,11 @@
   "universe": "(from csv)",
   "start": "2016-01-01",
   "filters": "price>\u20b9100, mcap\u2265\u20b91000cr",
+<<<<<<< Updated upstream
   "generated": "2026-09-25 00:19:39",
+=======
+  "generated": "2026-09-25 00:22:08",
+>>>>>>> Stashed changes
   "horizon": 30,
   "rule": "pole(\u22659.8% locked, 3x vol) \u2192 flag(\u226550% give-back, base intact) \u2192 sweep of flag low \u2192 close back above the rail; stop sweep-low \u2212 0.5ATR, target pole high, 60-bar time stop",
   "watchlist": [
