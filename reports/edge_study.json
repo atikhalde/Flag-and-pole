@@ -1,7 +1,7 @@
 {
  "trigger": "first_bullish",
  "split": "2022-01-01",
- "trades": 4236,
+ "trades": 4235,
  "classic_trades": 1329,
  "basis": {
   "returns": "the implemented rule: one row per trigger, VOIDED triggers counted as closed trades (this is what the account would experience)",
@@ -356,68 +356,68 @@
  },
  "void_accounting": {
   "triggered": 1329,
-  "voided": 3417,
-  "total_rows": 4236,
+  "voided": 3416,
+  "total_rows": 4235,
   "note": "every entry that the re-base rule voids is closed at that close and counted, so the implemented rule pays for its own churn; it is NOT free to wait for a cleaner entry"
  },
  "returns": {
   "equal_weight_30d": {
-   "avg": 0.0064,
-   "median": -0.0114,
-   "win": 0.4672
+   "avg": 0.0065,
+   "median": -0.0113,
+   "win": 0.4673
   },
   "equity": [
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 0.5,
     "cost_R": 0.0,
-    "final": 627416.0,
-    "total_return": -0.373,
-    "cagr": -0.0435,
-    "max_dd": 0.788,
+    "final": 629147.0,
+    "total_return": -0.371,
+    "cagr": -0.0433,
+    "max_dd": 0.787,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
+    "signals_per_year": 404.2,
     "sharpe": -0.26,
-    "years": 10.49
+    "years": 10.48
    },
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 0.5,
     "cost_R": 0.1,
-    "final": 75399.0,
-    "total_return": -0.925,
-    "cagr": -0.2185,
+    "final": 75645.0,
+    "total_return": -0.924,
+    "cagr": -0.2184,
     "max_dd": 0.959,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
+    "signals_per_year": 404.2,
     "sharpe": -1.74,
-    "years": 10.49
+    "years": 10.48
    },
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 0.5,
     "cost_R": 0.25,
-    "final": 3135.0,
+    "final": 3147.0,
     "total_return": -0.997,
-    "cagr": -0.4229,
+    "cagr": -0.423,
     "max_dd": 0.998,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
-    "sharpe": -3.96,
-    "years": 10.49
+    "signals_per_year": 404.2,
+    "sharpe": -3.95,
+    "years": 10.48
    },
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 0.5,
     "cost_R": 0.5,
     "final": 16.0,
     "total_return": -1.0,
-    "cagr": -0.6521,
+    "cagr": -0.6522,
     "max_dd": 1.0,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
+    "signals_per_year": 404.2,
     "sharpe": -7.65,
-    "years": 10.49
+    "years": 10.48
    }
   ],
   "equity_fixed": [
@@ -463,57 +463,57 @@
   ],
   "equity_fixed_ungated": [
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 0.5,
     "cost_R": 0.1,
-    "final": 75399.0,
-    "total_return": -0.925,
-    "cagr": -0.2185,
+    "final": 75645.0,
+    "total_return": -0.924,
+    "cagr": -0.2184,
     "max_dd": 0.959,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
+    "signals_per_year": 404.2,
     "sharpe": -1.74,
-    "years": 10.49
+    "years": 10.48
    },
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 1.0,
     "cost_R": 0.1,
-    "final": 4705.0,
+    "final": 4736.0,
     "total_return": -0.995,
-    "cagr": -0.4002,
+    "cagr": -0.4,
     "max_dd": 0.999,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
+    "signals_per_year": 404.2,
     "sharpe": -1.74,
-    "years": 10.49
+    "years": 10.48
    },
    {
-    "trades": 4236,
+    "trades": 4235,
     "risk_pct": 2.0,
     "cost_R": 0.1,
     "final": 11.0,
     "total_return": -1.0,
-    "cagr": -0.6644,
+    "cagr": -0.6642,
     "max_dd": 1.0,
     "worst_losing_streak": 248,
-    "signals_per_year": 404.0,
+    "signals_per_year": 404.2,
     "sharpe": -1.74,
-    "years": 10.49
+    "years": 10.48
    }
   ],
   "equity_at_1pct_risk": {
-   "trades": 4236,
+   "trades": 4235,
    "risk_pct": 1.0,
    "cost_R": 0.0,
-   "final": 326420.0,
-   "total_return": -0.674,
-   "cagr": -0.1013,
+   "final": 328225.0,
+   "total_return": -0.672,
+   "cagr": -0.1009,
    "max_dd": 0.956,
    "worst_losing_streak": 248,
-   "signals_per_year": 404.0,
+   "signals_per_year": 404.2,
    "sharpe": -0.26,
-   "years": 10.49
+   "years": 10.48
   },
   "benchmark": {
    "name": "NIFTY 50 buy & hold",
@@ -1555,24 +1555,24 @@
  "candidate_compare": [
   {
    "rule": "all signals",
-   "n": 4236,
-   "per_year": 385.1,
+   "n": 4235,
+   "per_year": 385.0,
    "win": 0.157,
    "avgR": -0.017,
-   "med30": -0.0114,
+   "med30": -0.0113,
    "payoff": 5.16,
    "train_avgR": 0.057,
    "train_n": 1863,
-   "test_avgR": -0.076,
-   "test_n": 2373,
+   "test_avgR": -0.075,
+   "test_n": 2372,
    "losing_years": 6,
    "years": 11,
    "worst_year": -0.29,
-   "cagr_no_cost": -0.0435,
-   "cagr_0p1R": -0.2185,
-   "maxdd": 0.788,
+   "cagr_no_cost": -0.0433,
+   "cagr_0p1R": -0.2184,
+   "maxdd": 0.787,
    "sharpe": -0.26,
-   "total_R": -74.0
+   "total_R": -73.4
   },
   {
    "rule": "6-condition (previous default)",
@@ -1591,7 +1591,7 @@
    "worst_year": 0.19,
    "cagr_no_cost": 0.1622,
    "cagr_0p1R": 0.1422,
-   "maxdd": 0.033,
+   "maxdd": 0.035,
    "sharpe": 2.42,
    "total_R": 314.2
   },
@@ -1622,7 +1622,7 @@
    "per_year": 67.7,
    "win": 0.373,
    "avgR": 0.659,
-   "med30": 0.0509,
+   "med30": 0.0513,
    "payoff": 4.88,
    "train_avgR": 0.749,
    "train_n": 298,
@@ -1643,7 +1643,7 @@
    "per_year": 75.1,
    "win": 0.373,
    "avgR": 0.679,
-   "med30": 0.0511,
+   "med30": 0.0518,
    "payoff": 5.0,
    "train_avgR": 0.787,
    "train_n": 334,

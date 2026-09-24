@@ -1,26 +1,26 @@
 {
  "first_bullish": {
-  "trades": 4236,
-  "trades_with_return": 4236,
-  "win_rate_ret": 0.4672,
-  "avg_ret": 0.0064,
-  "median_ret": -0.0114,
+  "trades": 4235,
+  "trades_with_return": 4235,
+  "win_rate_ret": 0.4673,
+  "avg_ret": 0.0065,
+  "median_ret": -0.0113,
   "p25_ret": -0.1013,
-  "p75_ret": 0.0932,
+  "p75_ret": 0.0933,
   "target_pct": 0.1249,
   "stopped_pct": 0.0276,
-  "time_pct": 0.0408,
+  "time_pct": 0.0409,
   "avg_R": -0.017,
   "median_R": -0.46,
-  "total_R": -74.0,
+  "total_R": -73.4,
   "avg_win_R": 2.598,
   "avg_loss_R": -0.504,
   "payoff": 5.16,
   "median_risk_pct": 12.08,
   "median_MFE": 0.1621,
   "median_MAE": -0.1552,
-  "max_drawdown_R": -294.1,
-  "avg_hold_bars": 14.3,
+  "max_drawdown_R": -293.1,
+  "avg_hold_bars": 14.4,
   "median_pole_gain": 0.3706,
   "median_flag_bars": 18.0,
   "horizon_bars": 30
@@ -28,11 +28,11 @@
  "rail_reclaim": {
   "trades": 1141,
   "trades_with_return": 1141,
-  "win_rate_ret": 0.4373,
-  "avg_ret": 0.0067,
-  "median_ret": -0.0206,
+  "win_rate_ret": 0.4382,
+  "avg_ret": 0.0068,
+  "median_ret": -0.0202,
   "p25_ret": -0.1185,
-  "p75_ret": 0.0955,
+  "p75_ret": 0.0957,
   "target_pct": 0.4487,
   "stopped_pct": 0.0412,
   "time_pct": 0.0833,
@@ -54,8 +54,8 @@
  "_baseline": {
   "median_ret": 0.0102,
   "avg_ret": 0.0313,
-  "win_rate": 0.5336,
-  "samples": 2383197
+  "win_rate": 0.5337,
+  "samples": 2382562
  },
  "_evidence": {
   "by_year": [
@@ -151,12 +151,12 @@
    },
    {
     "year": 2026,
-    "trades": 467,
+    "trades": 466,
     "win": 0.101,
-    "avgR": -0.205,
+    "avgR": -0.204,
     "medR": -0.53,
-    "med_ret": 0.026,
-    "target": 0.081
+    "med_ret": 0.027,
+    "target": 0.082
    }
   ],
   "by_regime": [
@@ -172,19 +172,19 @@
    },
    {
     "regime": "NIFTY below 200-DMA",
-    "trades": 1470,
+    "trades": 1469,
     "win": 0.133,
     "avgR": -0.092,
     "medR": -0.46,
-    "med_ret": 0.0062,
-    "avg_ret": 0.0235,
-    "target": 0.105
+    "med_ret": 0.0065,
+    "avg_ret": 0.0238,
+    "target": 0.106
    }
   ],
   "by_sweep": [
    {
     "sweep_bucket": "deeper than \u22123%",
-    "trades": 4234,
+    "trades": 4233,
     "win": 0.157,
     "avgR": -0.018,
     "med_ret": -0.011,
@@ -202,12 +202,12 @@
   "best_config": [
    {
     "label": "A . every signal (no gate)",
-    "trades": 4236,
+    "trades": 4235,
     "win": 0.157,
     "avgR": -0.017,
     "medR": -0.46,
-    "med_ret": -0.0114,
-    "avg_ret": 0.0064,
+    "med_ret": -0.0113,
+    "avg_ret": 0.0065,
     "target": 0.125,
     "stopped": 0.028
    },
@@ -224,35 +224,35 @@
    },
    {
     "label": "C . quiet reclaim + drift >= 25 bars + shakeout >= 8%",
-    "trades": 1156,
+    "trades": 1155,
     "win": 0.097,
     "avgR": -0.161,
     "medR": -0.46,
-    "med_ret": -0.0209,
+    "med_ret": -0.0208,
     "avg_ret": -0.0089,
     "target": 0.065,
     "stopped": 0.018
    },
    {
     "label": "C . shipped profile + weak market",
-    "trades": 415,
+    "trades": 414,
     "win": 0.082,
     "avgR": -0.203,
     "medR": -0.46,
-    "med_ret": 0.0041,
-    "avg_ret": 0.0158,
+    "med_ret": 0.0056,
+    "avg_ret": 0.016,
     "target": 0.065,
     "stopped": 0.012
    },
    {
     "label": "D . weak market only",
-    "trades": 1470,
+    "trades": 1469,
     "win": 0.133,
     "avgR": -0.092,
     "medR": -0.46,
-    "med_ret": 0.0062,
-    "avg_ret": 0.0235,
-    "target": 0.105,
+    "med_ret": 0.0065,
+    "avg_ret": 0.0238,
+    "target": 0.106,
     "stopped": 0.02
    }
   ],
@@ -267,9 +267,9 @@
    },
    {
     "vol_bucket": "0.5-0.8x",
-    "trades": 1059,
+    "trades": 1058,
     "win": 0.129,
-    "avgR": -0.06,
+    "avgR": -0.059,
     "med_ret": -0.012,
     "stopped": 0.026
    },
@@ -302,7 +302,7 @@
     "trades": 276,
     "win": 0.156,
     "avgR": -0.232,
-    "med_ret": -0.061,
+    "med_ret": -0.06,
     "stopped": 0.018
    }
   ],
@@ -312,19 +312,19 @@
     "win": 0.156,
     "avgR": -0.232,
     "medR": -0.56,
-    "med_ret": -0.0611,
-    "avg_ret": -0.0301,
+    "med_ret": -0.0599,
+    "avg_ret": -0.0299,
     "target": 0.13,
     "stopped": 0.018
    },
    "ok": {
-    "trades": 3960,
+    "trades": 3959,
     "win": 0.157,
     "avgR": -0.002,
-    "medR": -0.46,
+    "medR": -0.45,
     "med_ret": -0.0066,
-    "avg_ret": 0.0089,
-    "target": 0.124,
+    "avg_ret": 0.009,
+    "target": 0.125,
     "stopped": 0.028
    },
    "threshold": 3.0
@@ -332,12 +332,12 @@
   "profiles": [
    {
     "label": "off - every signal",
-    "trades": 4236,
+    "trades": 4235,
     "win": 0.157,
     "avgR": -0.017,
     "medR": -0.46,
-    "med_ret": -0.0114,
-    "avg_ret": 0.0064,
+    "med_ret": -0.0113,
+    "avg_ret": 0.0065,
     "target": 0.125,
     "stopped": 0.028,
     "train": {
@@ -351,25 +351,25 @@
      "stopped": 0.03
     },
     "test": {
-     "trades": 2373,
+     "trades": 2372,
      "win": 0.145,
-     "avgR": -0.076,
+     "avgR": -0.075,
      "medR": -0.48,
-     "med_ret": -0.0128,
-     "avg_ret": 0.0148,
+     "med_ret": -0.0126,
+     "avg_ret": 0.015,
      "target": 0.116,
      "stopped": 0.026
     }
    },
    {
     "label": "weak market only (NIFTY < 200DMA)",
-    "trades": 1470,
+    "trades": 1469,
     "win": 0.133,
     "avgR": -0.092,
     "medR": -0.46,
-    "med_ret": 0.0062,
-    "avg_ret": 0.0235,
-    "target": 0.105,
+    "med_ret": 0.0065,
+    "avg_ret": 0.0238,
+    "target": 0.106,
     "stopped": 0.02,
     "train": {
      "trades": 521,
@@ -382,23 +382,23 @@
      "stopped": 0.013
     },
     "test": {
-     "trades": 949,
+     "trades": 948,
      "win": 0.124,
      "avgR": -0.134,
      "medR": -0.48,
-     "med_ret": 0.0004,
-     "avg_ret": 0.0241,
+     "med_ret": 0.0011,
+     "avg_ret": 0.0245,
      "target": 0.098,
      "stopped": 0.024
     }
    },
    {
     "label": "balanced - quiet reclaim, drift>=15",
-    "trades": 2271,
+    "trades": 2270,
     "win": 0.142,
     "avgR": 0.005,
     "medR": -0.46,
-    "med_ret": -0.0102,
+    "med_ret": -0.0099,
     "avg_ret": 0.0034,
     "target": 0.107,
     "stopped": 0.03,
@@ -413,23 +413,23 @@
      "stopped": 0.031
     },
     "test": {
-     "trades": 1274,
+     "trades": 1273,
      "win": 0.126,
      "avgR": -0.078,
      "medR": -0.47,
-     "med_ret": -0.0129,
-     "avg_ret": 0.0096,
+     "med_ret": -0.0128,
+     "avg_ret": 0.0097,
      "target": 0.095,
      "stopped": 0.028
     }
    },
    {
     "label": "strict - quiet, drift>=25, sweep>=8%",
-    "trades": 1156,
+    "trades": 1155,
     "win": 0.097,
     "avgR": -0.161,
     "medR": -0.46,
-    "med_ret": -0.0209,
+    "med_ret": -0.0208,
     "avg_ret": -0.0089,
     "target": 0.065,
     "stopped": 0.018,
@@ -444,12 +444,12 @@
      "stopped": 0.024
     },
     "test": {
-     "trades": 698,
+     "trades": 697,
      "win": 0.093,
-     "avgR": -0.2,
+     "avgR": -0.199,
      "medR": -0.47,
-     "med_ret": -0.0208,
-     "avg_ret": 0.0028,
+     "med_ret": -0.0203,
+     "avg_ret": 0.0029,
      "target": 0.062,
      "stopped": 0.014
     }
@@ -523,7 +523,7 @@
     "trades": 345,
     "win": 0.162,
     "avgR": -0.281,
-    "med_ret": -0.082
+    "med_ret": -0.081
    },
    {
     "rb": "1\u20131.5R",
@@ -537,7 +537,7 @@
     "trades": 554,
     "win": 0.144,
     "avgR": -0.193,
-    "med_ret": -0.036
+    "med_ret": -0.035
    },
    {
     "rb": "2\u20133R",
@@ -548,7 +548,7 @@
    },
    {
     "rb": ">3R",
-    "trades": 1817,
+    "trades": 1816,
     "win": 0.166,
     "avgR": 0.192,
     "med_ret": 0.024
@@ -559,7 +559,7 @@
   "universe": "(from csv)",
   "start": "2016-01-01",
   "filters": "price>\u20b9100, mcap\u2265\u20b91000cr",
-  "generated": "2026-09-25 00:04:01",
+  "generated": "2026-09-25 00:19:39",
   "horizon": 30,
   "rule": "pole(\u22659.8% locked, 3x vol) \u2192 flag(\u226550% give-back, base intact) \u2192 sweep of flag low \u2192 close back above the rail; stop sweep-low \u2212 0.5ATR, target pole high, 60-bar time stop",
   "watchlist": [
