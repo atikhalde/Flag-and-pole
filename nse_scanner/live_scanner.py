@@ -16,7 +16,7 @@ Usage:
   python3 -m nse_scanner.live_scanner --limit 200 --no-telegram   (testing)
 """
 from __future__ import annotations
-import argparse, sys, time
+import argparse, os, sys, time
 import numpy as np
 import pandas as pd
 
@@ -212,22 +212,92 @@ def run(args) -> int:
             sent += 1
 
     # ---- daily digest (post-close run only, once per day)
+    #  it lists what is ON THE BOARD: waiting setups, fresh triggers AND positions already running,
+    #  plus the names the filters rejected, so a quiet day still tells you something.
     today = str(now.date())
-    if confirmed and state.get("digest_last") != today and not args.no_digest:
+    digest_sent = False
+    if (confirmed or args.force_digest) and (state.get("digest_last") != today or args.force_digest) \
+            and not args.no_digest:
         items = []
-        for r in waiting + buys:
+        for r in waiting + buys + in_trade:
             r["mcap_cr"] = mcap_map.get(r["symbol"])
             items.append(r)
         items.sort(key=lambda x: {"SWEPT": 0, "BUY": 1, "IN TRADE": 2, "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
+        text = TG.digest(items, "post-close digest", gated=gated, fresh=len(buys))
         if not args.no_telegram:
-            TG.send(TG.digest(items, "post-close digest"))
+            digest_sent = TG.send(text)
         else:
-            print(TG.digest(items, "post-close digest"))
+            print(text); digest_sent = True
         state["digest_last"] = today
 
     D.save_state(state)
-    print(f"[done] alerts sent {sent} | digest {'yes' if confirmed else 'no'} | state saved")
+    print(f"[done] alerts sent {sent} | digest {'sent' if digest_sent else ('skipped (already sent today)' if confirmed else 'no (not a post-close run)')} "
+          f"| {len(in_trade)} position(s) open | state saved")
+
+    _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map)
     return 0
+
+
+def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map):
+    """Write the job summary shown on the Actions run page (GITHUB_STEP_SUMMARY)."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    L = ["## NSE flag scanner — run result", ""]
+    L.append(f"**{mode}** · trigger `{C.TRIGGER_MODE}` · profile `{C.QUALITY_PROFILE}` · "
+             f"volume cap {C.EXCLUDE_VOL_SPIKE_X}x · regime filter `{C.REGIME_FILTER}`")
+    L.append("")
+    L.append(f"| fresh BUY | already in trade | filtered out | waiting | alerts sent | digest |")
+    L.append(f"|---|---|---|---|---|---|")
+    L.append(f"| **{len(buys)}** | {len(in_trade)} | {len(gated)} | {len(waiting)} | {sent} | "
+             f"{'sent' if digest_sent else 'not sent'} |")
+    L.append("")
+    if regime.get("ok"):
+        L.append(f"NIFTY {regime['close']:.0f} vs 200-DMA {regime['ma200']:.0f} "
+                 f"({regime['pct_vs_ma']:+.2f}%) — {'bull' if regime['bull'] else 'weak'} tape")
+        L.append("")
+    def _tbl(title, rows, cols):
+        if not rows:
+            return
+        L.append(f"### {title}")
+        L.append("")
+        L.append("| " + " | ".join(cols) + " |")
+        L.append("|" + "---|" * len(cols))
+        for r in rows:
+            L.append("| " + " | ".join(str(x) for x in r) + " |")
+        L.append("")
+    def _r_now(r):
+        risk = (r.get("entry") or 0) - (r.get("stop") or 0)
+        if risk > 0 and r.get("last_close"):
+            return (r["last_close"] - r["entry"]) / risk
+        return None
+    _pos = sorted(in_trade, key=lambda x: -(_r_now(x) if _r_now(x) is not None else -99))
+    _tbl(f"Positions already running ({len(in_trade)})",
+         [[f"`{r['symbol']}`", r.get("shortName") or "", r.get("entry_date"), r.get("entry"), r.get("stop"),
+           r.get("risk_pct"), r.get("last_close"),
+           (f"{_r_now(r):+.2f}R" if _r_now(r) is not None else "")]
+          for r in _pos],
+         ["symbol", "name", "entry date", "entry", "stop", "risk %", "last", "R now"])
+    _tbl(f"Fresh BUY signals ({len(buys)})",
+         [[f"`{r['symbol']}`", r.get("shortName") or "", r.get("entry_date"), r.get("entry"), r.get("stop"),
+           r.get("target"), r.get("risk_pct"), r.get("reward_R"), r.get("vol_x20")] for r in buys],
+         ["symbol", "name", "entry date", "entry", "stop", "target", "risk %", "reward R", "vol x"])
+    _tbl(f"Waiting for a trigger ({len(waiting)})",
+         [[f"`{r['symbol']}`", r.get("status"), r.get("rail"), r.get("sweep_low"), r.get("dist_to_rail_pct")]
+          for r in waiting], ["symbol", "stage", "rail", "shakeout low", "% to rail"])
+    _tbl(f"Filtered out by the quality gates ({len(gated)})",
+         [[f"`{r['symbol']}`", r.get("skip_reason")] for r in gated], ["symbol", "why it was skipped"])
+    L.append("---")
+    L.append("*No fresh signal is normal:* the trigger fires on the exact day of the first bullish candle after a "
+             "shakeout. With the `strict` profile the whole universe produces roughly one signal every three weeks "
+             "(`balanced` is about one a week). The digest above is what keeps you informed in between — it always "
+             "lists the open positions and the names that were filtered out.")
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\n".join(L) + "\n")
+        print(f"[summary] wrote the run summary to GITHUB_STEP_SUMMARY")
+    except Exception as e:
+        print(f"[summary] could not write the run summary: {type(e).__name__} {e}")
 
 
 def main():
@@ -238,7 +308,14 @@ def main():
     ap.add_argument("--digest-only", action="store_true")
     ap.add_argument("--no-telegram", action="store_true", help="print alerts instead of sending")
     ap.add_argument("--no-digest", action="store_true")
+    ap.add_argument("--force-digest", action="store_true", help="send the digest even if one went out today")
+    ap.add_argument("--test-telegram", action="store_true", help="send a one-line test message and exit")
     args = ap.parse_args()
+    if args.test_telegram:
+        ok = TG.send("✅ <b>NSE flag scanner</b> - test message. The Telegram wiring works. "
+                     "You will get an alert here the moment a stock triggers.")
+        print(f"[test-telegram] {'delivered to Telegram' if ok else 'FAILED - check TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID'}")
+        return 0 if ok else 1
     if args.digest_only:
         args.no_telegram = False
     sys.exit(run(args))

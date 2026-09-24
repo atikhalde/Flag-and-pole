@@ -254,6 +254,69 @@ def by_year(df: pd.DataFrame) -> pd.DataFrame:
     return g.round(3)
 
 
+def _run_summary(df, summary, open_df, main_mode, out_dir):
+    """Write the job summary shown on the Actions run page."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    sm = summary.get(main_mode, {})
+    base = summary.get("_baseline", {}) or {}
+    ev = summary.get("_evidence", {}) or {}
+    L = ["## NSE back-test — run result", ""]
+    L.append(f"Entry rule **{main_mode}** · {summary.get('_meta',{}).get('universe','?')} symbols · "
+             f"history from {summary.get('_meta',{}).get('start','?')} · filters {summary.get('_meta',{}).get('filters','')}")
+    L.append("")
+    L.append("| metric | value | market baseline |")
+    L.append("|---|---|---|")
+    L.append(f"| completed trades | **{sm.get('trades','?')}** | — |")
+    L.append(f"| return after {C.RET_HORIZON} bars — median | {sm.get('median_ret',0)*100:+.2f}% | "
+             f"{base.get('median_ret',0)*100:+.2f}% |")
+    L.append(f"| return after {C.RET_HORIZON} bars — average | {sm.get('avg_ret',0)*100:+.2f}% | "
+             f"{base.get('avg_ret',0)*100:+.2f}% |")
+    L.append(f"| win rate | {sm.get('win_rate_ret',0)*100:.1f}% | {base.get('win_rate',0)*100:.1f}% |")
+    L.append(f"| expectancy | **{sm.get('avg_R',0):+.2f}R** (payoff {sm.get('payoff','?')}:1) | — |")
+    L.append(f"| target / stopped / time | {sm.get('target_pct',0)*100:.0f}% / {sm.get('stopped_pct',0)*100:.0f}% / "
+             f"{sm.get('time_pct',0)*100:.0f}% | — |")
+    L.append(f"| total R / worst drawdown | {sm.get('total_R',0):+.1f}R / {sm.get('max_drawdown_R',0):.1f}R | — |")
+    L.append("")
+    if ev.get("profiles"):
+        L.append("### Filter profiles, measured on a train/test split")
+        L.append("")
+        L.append("| profile | trades | avg R | median 30-bar | train R (<2022) | test R (2022+) |")
+        L.append("|---|---|---|---|---|---|")
+        for pr in ev["profiles"]:
+            tr = pr.get("train") or {}; te = pr.get("test") or {}
+            L.append(f"| {pr['label']} | {pr['trades']} | {pr['avgR']:+.2f} | {pr.get('med_ret',0)*100:+.2f}% | "
+                     f"{tr.get('avgR', float('nan')):+.2f} | {te.get('avgR', float('nan')):+.2f} |")
+        L.append("")
+    if ev.get("false_signal"):
+        fs = ev["false_signal"]
+        L.append(f"**The false signal:** reclaim bars on more than {fs.get('threshold')}x average volume average "
+                 f"{fs.get('spike',{}).get('avgR',0):+.2f}R, everything else {fs.get('ok',{}).get('avgR',0):+.2f}R.")
+        L.append("")
+    if open_df is not None and len(open_df):
+        od = open_df[open_df.trigger_mode == main_mode]
+        L.append(f"### Positions still open at the report date ({len(od)})")
+        L.append("")
+        L.append("| symbol | name | entry date | entry | last | R now |")
+        L.append("|---|---|---|---|---|---|")
+        for _, r in od.sort_values("R", ascending=False).head(15).iterrows():
+            L.append(f"| `{r.symbol}` | {r.get('shortName','')} | {str(r.entry_date)[:10]} | {r.entry:.2f} | "
+                     f"{r.get('last_close', float('nan')):.2f} | "
+                     f"{(f'{r.R:+.2f}R' if r.R == r.R else '-')} |")
+        L.append("")
+    L.append("---")
+    L.append(f"The full report — headline stats, the filter study, every position and the trade log with full company "
+             f"names — is the **`backtest_report.pdf`** artifact of this run, and it is committed to "
+             f"`{out_dir}/backtest_report.pdf` in the repo.")
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\n".join(L) + "\n")
+        print("[summary] wrote the run summary to GITHUB_STEP_SUMMARY")
+    except Exception as e:
+        print(f"[summary] could not write the run summary: {type(e).__name__} {e}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="NSE pole-flag-sweep-reclaim back-test")
     ap.add_argument("--limit", type=int, default=0)
@@ -298,6 +361,7 @@ def main():
         from . import pdf_report
         path = pdf_report.build(df, summary, f"{a.out}/backtest_report.pdf", open_df=open_df)
         print(f"PDF report → {path}")
+        _run_summary(df, summary, open_df, _main, a.out)
         return 0
 
     uni = D.load_universe(limit=a.limit)
@@ -348,6 +412,7 @@ def main():
         from . import pdf_report
         path = pdf_report.build(df, summary, f"{a.out}/backtest_report.pdf", open_df=open_df)
         print(f"\nPDF report → {path}")
+    _run_summary(df, summary, open_df, _main, a.out)
     return 0
 
 

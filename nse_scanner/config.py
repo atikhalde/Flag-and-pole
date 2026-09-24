@@ -63,12 +63,16 @@ EXCLUDE_VOL_SPIKE_X = float(os.getenv("EXCLUDE_VOL_SPIKE_X", 3.0))
 #     volume 0.8-1.2x -> +0.51R | volume >3x -> -0.05R
 
 # ── quality profile, validated out-of-sample (train <2022 / test >=2022) ──
-QUALITY_PROFILE      = os.getenv("QUALITY_PROFILE", "strict")   # "off" | "balanced" | "strict"
+QUALITY_PROFILE      = os.getenv("QUALITY_PROFILE", "balanced")  # "off" | "balanced" | "strict"
 QUALITY_MIN_DRIFT    = int(os.getenv("QUALITY_MIN_DRIFT", 25))  # balanced=15, strict=25
 QUALITY_MIN_SWEEP    = float(os.getenv("QUALITY_MIN_SWEEP", 8.0))  # strict: shakeout >= 8% below the rail
-#   strict   : volume<=2x + drift>=25 + shakeout<=-8%  -> 146 trades | +0.53R | 42% win | median +2.9%
-#              train +0.54 / test +0.52  (the only combination that barely decays out-of-sample)
-#   balanced : volume<=2x + drift>=15                 -> 674 trades | +0.33R | train +0.46 / test +0.21
+#   strict   : volume<=2x + drift>=25 + shakeout<=-8%  -> 149 trades | +0.51R | 42% win | median +2.9%
+#              train +0.54 / test +0.49   <- best expectancy, but the WHOLE universe only yields
+#              ~16 signals a year, i.e. roughly one alert every three weeks
+#   balanced : volume<=2x + drift>=15                 -> 677 trades | +0.33R | train +0.46 / test +0.21
+#              <- the shipped default: ~1 alert a week, still keeps the volume cap that removes the traps
+#   Note both keep the >3x volume rejection (EXCLUDE_VOL_SPIKE_X): that is the false-signal filter.
+#   Override per run from the Actions tab: workflow input "profile" sets this env var.
 
 # ──────────────────────────────── universe filters ────────────────────────────────
 MIN_PRICE          = float(os.getenv("MIN_PRICE", 100))         # ₹
