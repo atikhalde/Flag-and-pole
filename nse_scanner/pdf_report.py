@@ -384,6 +384,12 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                          _pct(r["med_ret"], 1), f"{r['stopped']*100:.0f}%"])
         F.append(_table(rows, [48*mm, 18*mm, 18*mm, 18*mm, 36*mm, 22*mm], font=7.4))
         F.append(Paragraph(
+            "<b>And the shakeout that precedes it must bring volume.</b> The two charts this engine was derived from "
+            "both break down on expanding volume out of a quiet drift. Across the universe, shakeout legs that never "
+            "reach their own 20-day average volume (765 of 1,326 trades) earn +0.11R, decaying to +0.06R out of "
+            "sample; legs that do (561 trades) earn +0.35R. Adding the red structure - more than half the leg red, "
+            "with at least one -4% day - lifts that to +0.47R. This is the gate the live scanner now runs.", SMALL))
+        F.append(Paragraph(
             "The relationship is monotonic and it is the strongest single variable in the data: quiet reclaims "
             "(0.8-1.2x average volume) average +0.51R, while >3x average volume averages -0.05R with a negative "
             "median. Note the trade-off - the low-volume buckets stop out slightly more often, because the "
@@ -401,10 +407,16 @@ def build(df: pd.DataFrame, summary: dict, path: str = "reports/backtest_report.
                          fmt(tr.get("avgR"), tr.get("trades", 0)), fmt(te.get("avgR"), te.get("trades", 0))])
         F.append(_table(rows, [58*mm, 14*mm, 14*mm, 14*mm, 24*mm, 27*mm, 27*mm], font=7.2))
         F.append(Paragraph(
-            "<b>The strict profile is the one to trade.</b> It keeps 11% of the signals and is the only profile whose "
-            "edge barely decays when the history is cut in two - roughly +0.5R on both halves. The loose version keeps "
-            "three times as many trades and loses a third of its edge on the test half. Set QUALITY_PROFILE in "
-            "config.py to <i>off</i>, <i>balanced</i> or <i>strict</i>.", SMALL))
+            "<b>The volume profile is the one to trade, and it is what the source charts actually show.</b> An earlier "
+            "version of this report filtered only on the shakeout's <i>depth</i> and on the quietness of the reclaim "
+            "candle. Both of the charts this engine was built from do much more than dip below the floor: the "
+            "shakeout is a <b>volume event with a red, falling structure</b> - NIACL breaks down on 2.0x average "
+            "volume (7.7x the volume of its own quiet drift) with 2 of 3 bars red and a -4.9% day; LAMBODHARA "
+            "collapses on 1.14x average volume (6.3x its drift) with 4 of 5 bars red and a -9.6% day. Requiring that "
+            "signature keeps 13% of signals and is the most stable gate measured here: <b>+0.46R before 2022 and "
+            "+0.59R after</b>, against +0.28R / +0.16R for taking everything. The trades it rejects - shakeouts that "
+            "never even reach average volume - earn +0.06R out of sample, i.e. nothing. Set QUALITY_PROFILE in "
+            "config.py to <i>off</i>, <i>balanced</i>, <i>strict</i> or <i>volume</i> (the default).", SMALL))
 
 
     # ---- the standalone filter study, when it has been run next to this report

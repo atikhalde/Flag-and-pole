@@ -126,6 +126,26 @@ def evaluate_live(frames: dict, live: dict, confirmed: bool, regime: dict = None
             elif C.QUALITY_PROFILE == "balanced":
                 if np.isfinite(st.flag_bars) and st.flag_bars < 15:
                     reasons.append(f"drift only {st.flag_bars} bars < 15")
+            elif C.QUALITY_PROFILE == "volume":
+                # the shakeout must be a volume event with a red, falling structure, and the
+                # reclaim must be quiet - this is the signature the two source charts show
+                if np.isfinite(st.sweep_vol_x20) and st.sweep_vol_x20 < C.SWEEP_MIN_VOL_X20:
+                    reasons.append(f"shakeout traded only {st.sweep_vol_x20}x its average volume "
+                                   f"(needs >= {C.SWEEP_MIN_VOL_X20}x - it must be a visible event)")
+                if np.isfinite(st.sweep_vol_vs_drift) and st.sweep_vol_vs_drift < C.SWEEP_MIN_VOL_VS_DRIFT:
+                    reasons.append(f"shakeout volume only {st.sweep_vol_vs_drift}x the drift's "
+                                   f"(needs >= {C.SWEEP_MIN_VOL_VS_DRIFT}x - volume must expand out of the quiet base)")
+                if np.isfinite(st.sweep_leg_pct) and st.sweep_leg_pct > -C.SWEEP_MIN_DROP_PCT:
+                    reasons.append(f"worst day in the shakeout {st.sweep_leg_pct}% "
+                                   f"(needs <= -{C.SWEEP_MIN_DROP_PCT}% - a red fall, not a quiet bleed)")
+                if np.isfinite(st.sweep_red_frac) and st.sweep_red_frac < C.SWEEP_MIN_RED_FRAC:
+                    reasons.append(f"only {st.sweep_red} of {st.sweep_bars} bars in the shakeout closed red "
+                                   f"(needs more than half)")
+                if np.isfinite(st.vol_x20) and st.vol_x20 > 2.0:
+                    reasons.append(f"reclaim bar volume {st.vol_x20}x > 2x (the reclaim should be quiet, "
+                                   f"not another volume spike)")
+                if np.isfinite(st.flag_bars) and st.flag_bars < 15:
+                    reasons.append(f"drift only {st.flag_bars} bars < 15")
             # ---- 3. optional regime gate (off by default - edge does not survive out-of-sample)
             if C.REGIME_FILTER == "weak_market" and regime.get("ok") and regime["bull"]:
                 reasons.append("NIFTY is above its 200-DMA (weak-market filter)")

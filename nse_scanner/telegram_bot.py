@@ -54,6 +54,9 @@ def alert_card(s: dict, kind: str) -> str:
         f"Pole       {s['pole_date']}   ₹{s['pole_low']} → ₹{s['pole_high']}  (+{round(s['pole_gain']*100,1)}%)",
         f"Flag       {s['flag_bars']} bars   rail ₹{s['rail']}",
         f"Sweep      {s['sweep_date']}   low ₹{s['sweep_low']}  ({s['sweep_below_pct']}% under rail)",
+        (f"Shakeout   {s.get('sweep_red')}/{s.get('sweep_bars')} bars red  ·  vol "
+         f"{s.get('sweep_vol_x20')}x average  ·  {s.get('sweep_vol_vs_drift')}x the drift  ·  "
+         f"worst day {s.get('sweep_leg_pct')}%" if s.get("sweep_vol_x20") is not None else ""),
         f"Trigger    {s['entry_date']}   vol {s['vol_x20']}× 20-day avg",
         "",
         f"<i>mcap ₹{s.get('mcap_cr','?')} cr · 20d turnover ₹{s.get('turnover_cr','?')} cr</i>",

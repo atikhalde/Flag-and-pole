@@ -163,9 +163,18 @@ def evidence_tables(df: pd.DataFrame) -> dict:
     out["best_config"].append(dict(label="A . every signal (no gate)", **_cfg(d)))
     _strict = d[(d.vol_x20 <= 2.0) & (d.flag_bars >= C.QUALITY_MIN_DRIFT)
                 & (d.sweep_below_pct <= -C.QUALITY_MIN_SWEEP)]
+    _volume = d[(d.sweep_vol_x20 >= C.SWEEP_MIN_VOL_X20)
+                & (d.sweep_vol_vs_drift >= C.SWEEP_MIN_VOL_VS_DRIFT)
+                & (d.sweep_leg_pct <= -C.SWEEP_MIN_DROP_PCT)
+                & (d.sweep_red_frac >= C.SWEEP_MIN_RED_FRAC)
+                & (d.vol_x20 <= 2.0) & (d.flag_bars >= 15)]
+    if len(_volume):
+        out["best_config"].append(dict(
+            label="B . shipped: shakeout volume event (red fall, volume expands out of the drift)",
+            **_cfg(_volume)))
     if len(_strict):
         out["best_config"].append(dict(
-            label=f"B . shipped profile: quiet reclaim + drift >= {C.QUALITY_MIN_DRIFT} bars + shakeout >= "
+            label=f"C . quiet reclaim + drift >= {C.QUALITY_MIN_DRIFT} bars + shakeout >= "
                   f"{C.QUALITY_MIN_SWEEP:.0f}%", **_cfg(_strict)))
         out["best_config"].append(dict(label="C . shipped profile + weak market",
                                        **_cfg(_strict[_strict.nifty_bull == False])))
@@ -199,7 +208,9 @@ def evidence_tables(df: pd.DataFrame) -> dict:
                             **_profile(d[d.nifty_bull == False])),
                        dict(label="balanced - quiet reclaim, drift >= 15 bars", **_profile(_balanced)),
                        dict(label=f"strict - quiet, drift >= {C.QUALITY_MIN_DRIFT}, "
-                                  f"shakeout >= {C.QUALITY_MIN_SWEEP:.0f}%", **_profile(_strict))]
+                                  f"shakeout >= {C.QUALITY_MIN_SWEEP:.0f}%", **_profile(_strict)),
+                       dict(label="volume - the shakeout must be a VOLUME event with a red fall "
+                                  "(the shipped default)", **_profile(_volume))]
 
     out["by_reward"] = (d.assign(rb=pd.cut(d.reward_R, [0, 1, 1.5, 2, 3, 99],
                                            labels=["<1R", "1–1.5R", "1.5–2R", "2–3R", ">3R"]))

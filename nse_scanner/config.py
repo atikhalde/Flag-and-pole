@@ -63,8 +63,22 @@ EXCLUDE_VOL_SPIKE_X = float(os.getenv("EXCLUDE_VOL_SPIKE_X", 3.0))
 #     volume 0.8-1.2x -> +0.51R | volume >3x -> -0.05R
 
 # ── quality profile, validated out-of-sample (train <2022 / test >=2022) ──
-QUALITY_PROFILE      = os.getenv("QUALITY_PROFILE", "balanced")  # "off" | "balanced" | "strict"
+QUALITY_PROFILE      = os.getenv("QUALITY_PROFILE", "volume")  # "off" | "balanced" | "strict" | "volume"
 QUALITY_MIN_DRIFT    = int(os.getenv("QUALITY_MIN_DRIFT", 25))  # balanced=15, strict=25
+
+# ── THE SHAKEOUT SIGNATURE (profile "volume") ────────────────────────────────────────────
+# This is what the two source charts actually show and what the detector was ignoring: the
+# shakeout is a VOLUME EVENT with a RED, FALLING structure, not just a dip below the floor.
+#   NIACL      2026-06: break bar 2.00x average, 7.7x the drift's own volume, 2 of 3 bars red, worst day -4.9%
+#   LAMBODHARA 2026-09: collapse bar 1.14x average, 6.3x the drift, 4 of 5 red (5 of 6 on the daily leg), -9.6%
+# Measured over the whole universe (1,326 trades), train <2022 / test >=2022:
+#   leg volume < 1.0x average  ->  765 trades | +0.11R | train +0.17 / test +0.06   (no edge at all)
+#   leg volume >= 1.0x average ->  561 trades | +0.35R | train +0.43 / test +0.27
+#   full signature             ->  178 trades | +0.54R | train +0.46 / test +0.59   <- most stable gate found
+SWEEP_MIN_VOL_X20     = float(os.getenv("SWEEP_MIN_VOL_X20", 1.0))     # leg must trade >= its 20-day average
+SWEEP_MIN_VOL_VS_DRIFT = float(os.getenv("SWEEP_MIN_VOL_VS_DRIFT", 3.0))  # ...and >= 3x the quiet drift's volume
+SWEEP_MIN_DROP_PCT    = float(os.getenv("SWEEP_MIN_DROP_PCT", 4.0))     # a red bar of at least this much
+SWEEP_MIN_RED_FRAC    = float(os.getenv("SWEEP_MIN_RED_FRAC", 0.5))     # more than half the leg must be red
 QUALITY_MIN_SWEEP    = float(os.getenv("QUALITY_MIN_SWEEP", 8.0))  # strict: shakeout >= 8% below the rail
 #   strict   : volume<=2x + drift>=25 + shakeout<=-8%  -> 149 trades | +0.51R | 42% win | median +2.9%
 #              train +0.54 / test +0.49   <- best expectancy, but the WHOLE universe only yields
