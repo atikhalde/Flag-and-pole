@@ -342,27 +342,51 @@ def run(args) -> int:
     # ---- daily digest (post-close run only, once per day)
     #  it lists what is ON THE BOARD: waiting setups, fresh triggers AND positions already running,
     #  plus the names the filters rejected, so a quiet day still tells you something.
-    today = str(now.date())
+    # ---- daily digest.  Keyed on the TRADING SESSION, never on the calendar date of the run:
+    #    * a run at 03:58 IST belongs to the previous session, so it cannot swallow the digest of the
+    #      day that has not opened yet (that bug silenced a full day);
+    #    * once the session is over - the confirmed post-close run, any later run, or the first run
+    #      of the next morning - the digest goes out if that session has not had one, so a cron that
+    #      misses the 15:35-16:15 IST window cannot silence a day either;
+    #    * it is marked as sent ONLY if Telegram accepted it.
+    session = str(D.session_date(now))
+    last_digest = state.get("digest_session")
+    session_over = confirmed or (not D.is_market_open(now))
     digest_sent = False
-    if (confirmed or args.force_digest) and (state.get("digest_last") != today or args.force_digest) \
-            and not args.no_digest:
+    if (args.force_digest or (session_over and last_digest != session)) and not args.no_digest:
         items = []
         for r in waiting + buys + in_trade:      # the watchlist has its own section below
             r["mcap_cr"] = mcap_map.get(r["symbol"])
             items.append(r)
         items.sort(key=lambda x: {"REBASING": 0, "SWEPT": 0, "BUY": 1, "IN TRADE": 2,
                                   "FLAG_READY": 3, "COILING": 4}.get(x["status"], 9))
-        text = TG.digest(items, "post-close digest", gated=gated + invalid, fresh=len(buys),
-                         newly_closed=newly_closed, watch=watch, data_through=data_through)
-        print(f"[digest] {len(items)} setup(s) on the board, {len(watch)} watchlist, {len(gated)} filtered out")
+        text = TG.digest(items, f"post-close digest · session {session}", gated=gated + invalid,
+                         fresh=len(buys), newly_closed=newly_closed, watch=watch,
+                         data_through=data_through)
+        print(f"[digest] session {session}: {len(items)} setup(s) on the board, {len(watch)} watchlist, "
+              f"{len(gated)} filtered out")
         if not args.no_telegram:
             digest_sent = TG.send(text)
         else:
             print(text); digest_sent = True
-        state["digest_last"] = today
+        if digest_sent:
+            state["digest_session"] = session
+        else:
+            print("  [digest] NOT marked as sent - the next run will try again (a failed send must "
+                  "never silence the rest of the day)")
 
     D.save_state(state)
-    print(f"[done] alerts sent {sent} | digest {'sent' if digest_sent else ('skipped (already sent today)' if confirmed else 'no (not a post-close run)')} "
+    if digest_sent:
+        _dig = f"sent (session {session})"
+    elif args.no_digest:
+        _dig = "disabled (--no-digest)"
+    elif not (args.force_digest or session_over):
+        _dig = "no (intraday run - the digest goes out once the session is over)"
+    elif last_digest == session:
+        _dig = f"skipped (session {session} already covered)"
+    else:
+        _dig = "failed (Telegram rejected it - retrying next run)"
+    print(f"[done] alerts sent {sent} | digest {_dig} "
           f"| {len(in_trade)} position(s) open | state saved")
 
     _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
