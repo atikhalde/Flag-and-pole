@@ -34,6 +34,10 @@ on:
         description: "send the digest even if one already went out today"
         type: boolean
         default: false
+      diag_telegram:
+        description: "report which bot/chat alerts go to + send a numbered ping, then exit"
+        type: boolean
+        default: false
 
 concurrency:
   group: live-flag-scan
@@ -84,7 +88,8 @@ jobs:
             if [ "${{ inputs.limit }}" != "0" ];         then ARGS="$ARGS --limit ${{ inputs.limit }}"; fi
             if [ "${{ inputs.dry_run }}" = "true" ];     then ARGS="$ARGS --no-telegram"; fi
             if [ "${{ inputs.force_digest }}" = "true" ]; then ARGS="$ARGS --force-digest"; fi
-            if [ "${{ inputs.test_telegram }}" = "true" ]; then ARGS="--test-telegram"; fi
+            if [ "${{ inputs.test_telegram }}" = "true" ]; then ARGS="$ARGS --test-telegram"; fi
+            if [ "${{ inputs.diag_telegram }}" = "true" ]; then ARGS="$ARGS --diag-telegram"; fi
           fi
           echo "flags:$ARGS"
           echo "profile:${QUALITY_PROFILE:-<repo default>}"
