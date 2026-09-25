@@ -342,6 +342,32 @@ def run(args) -> int:
     # ---- daily digest (post-close run only, once per day)
     #  it lists what is ON THE BOARD: waiting setups, fresh triggers AND positions already running,
     #  plus the names the filters rejected, so a quiet day still tells you something.
+    session = str(D.session_date(now))   # the trading session this run belongs to (see data.py)
+
+    # ---- hourly board line (one compact message per hour during the session, so a quiet day is
+    # still an incoming message; the post-close digest covers the rest of the day)
+    board_sent = False
+    if C.HOURLY_BOARD and not args.no_board and not args.no_digest:
+        hh = f"{now.hour:02d}"
+        if (D.is_market_open(now)
+                and (now.hour, now.minute) >= C.HOURLY_FROM
+                and (now.hour, now.minute) <= C.HOURLY_TO
+                and state.get("board_last") != f"{session}|{hh}"):
+            items_b = []
+            for r in waiting + buys + in_trade:
+                r["mcap_cr"] = mcap_map.get(r["symbol"])
+                items_b.append(r)
+            msg = TG.board_line(items_b, len(buys), len(gated), data_through, f"{now:%H:%M} IST")
+            print(f"[board] hourly board line (hour {hh}) - {len(items_b)} setup(s), "
+                  f"{len(buys)} fresh trigger(s)")
+            print(msg)
+            if not args.no_telegram:
+                board_sent = TG.send(msg)
+            else:
+                board_sent = True            # nothing to send in this mode; do not spam the state
+            if board_sent:
+                state["board_last"] = f"{session}|{hh}"
+
     # ---- daily digest.  Keyed on the TRADING SESSION, never on the calendar date of the run:
     #    * a run at 03:58 IST belongs to the previous session, so it cannot swallow the digest of the
     #      day that has not opened yet (that bug silenced a full day);
@@ -349,7 +375,6 @@ def run(args) -> int:
     #      of the next morning - the digest goes out if that session has not had one, so a cron that
     #      misses the 15:35-16:15 IST window cannot silence a day either;
     #    * it is marked as sent ONLY if Telegram accepted it.
-    session = str(D.session_date(now))
     last_digest = state.get("digest_session")
     session_over = confirmed or (not D.is_market_open(now))
     digest_sent = False
@@ -506,6 +531,8 @@ def main():
     ap.add_argument("--digest-only", action="store_true")
     ap.add_argument("--no-telegram", action="store_true", help="print alerts instead of sending")
     ap.add_argument("--no-digest", action="store_true")
+    ap.add_argument("--no-board", action="store_true",
+                    help="skip the hourly board line (it is sent once per hour during the session)")
     ap.add_argument("--force-digest", action="store_true", help="send the digest even if one went out today")
     ap.add_argument("--test-telegram", action="store_true", help="send a one-line test message and exit")
     ap.add_argument("--diag-telegram", action="store_true",

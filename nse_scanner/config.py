@@ -176,4 +176,12 @@ IST                = "Asia/Kolkata"
 MARKET_OPEN        = (9, 15)     # IST
 MARKET_CLOSE       = (15, 30)
 CONFIRMED_AFTER    = (15, 35)    # runs at/after this IST time are treated as the "confirmed close" run
+
+# ---- hourly board summary -------------------------------------------------------------
+# One COMPACT board line per hour during the session (open positions, any fresh trigger, how many
+# names the gates filtered) so a quiet day is never silence.  Sends on the first run at/after each
+# hour, once per hour per session, market hours only; the post-close digest (15:35+) covers the rest.
+HOURLY_BOARD       = True
+HOURLY_FROM        = (9, 30)      # IST - first hourly board after the 09:15 open
+HOURLY_TO          = (15, 20)     # IST - last one before the post-close digest
 CHART_LINK         = "https://www.tradingview.com/chart/?symbol=NSE:{sym}"

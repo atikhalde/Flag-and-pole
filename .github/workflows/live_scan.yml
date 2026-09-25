@@ -38,6 +38,10 @@ on:
         description: "report which bot/chat alerts go to + send a numbered ping, then exit"
         type: boolean
         default: false
+      no_board:
+        description: "skip the hourly board line (normally one compact message per hour)"
+        type: boolean
+        default: false
 
 concurrency:
   group: live-flag-scan
@@ -90,6 +94,7 @@ jobs:
             if [ "${{ inputs.force_digest }}" = "true" ]; then ARGS="$ARGS --force-digest"; fi
             if [ "${{ inputs.test_telegram }}" = "true" ]; then ARGS="$ARGS --test-telegram"; fi
             if [ "${{ inputs.diag_telegram }}" = "true" ]; then ARGS="$ARGS --diag-telegram"; fi
+            if [ "${{ inputs.no_board }}" = "true" ]; then ARGS="$ARGS --no-board"; fi
           fi
           echo "flags:$ARGS"
           echo "profile:${QUALITY_PROFILE:-<repo default>}"
