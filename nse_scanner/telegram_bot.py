@@ -8,6 +8,12 @@ import requests
 from . import config as C
 
 API = "https://api.telegram.org/bot{token}/sendMessage"
+# Every message this process delivered, and every one it failed to deliver.  The run summary prints
+# them, so "did it alert?" is answered from the Actions page instead of by assumption.
+SENT: list = []
+FAILED: list = []
+BOT_USERNAME: str = ""   # filled in by the first getMe (whoami), so the summary can name the bot
+
 API_ME = "https://api.telegram.org/bot{token}/getMe"
 API_CHAT = "https://api.telegram.org/bot{token}/getChat"
 API_UPD = "https://api.telegram.org/bot{token}/getUpdates"
@@ -42,7 +48,8 @@ def whoami(token: str = None, chat: str = None, updates: int = 20) -> dict:
         res = me.get("result") or {}
         out["bot"] = res
         if res:
-            print(f"  [diag] bot: @{res.get('username')} (\"{res.get('first_name')}\", id {_mask(res.get('id'))})")
+            globals()["BOT_USERNAME"] = res.get("username") or ""
+            print(f"  [diag] bot: @{res.get('username')} ({res.get('first_name')!r}, id {_mask(res.get('id'))})")
         else:
             print(f"  [diag] getMe FAILED: {str(me)[:180]}  <-- the token is wrong or revoked")
     except Exception as e:
@@ -77,7 +84,7 @@ def whoami(token: str = None, chat: str = None, updates: int = 20) -> dict:
             print(f"  [diag] {len(rows)} chat(s) have messaged this bot recently "
                   f"(set TELEGRAM_CHAT_ID to the right one):")
             for cid, name, typ, txt in rows:
-                print(f"           id={_mask(cid)}  \"{name}\"  type={typ}  last: {txt!r}")
+                print(f"           id={_mask(cid)}  {name!r}  type={typ}  last: {txt!r}")
         else:
             print("  [diag] no recent messages TO this bot - send it a 'hi' from your phone, re-run "
                   "this, and the chat id appears here")
@@ -97,6 +104,7 @@ def send(text: str, token: str = None, chat: str = None, disable_preview: bool =
     if not token or not chat:
         print("  [telegram] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — printing instead:\n" + text)
         return False
+    reason = ""
     for a in range(retries):
         try:
             r = requests.post(API.format(token=token),
@@ -107,17 +115,25 @@ def send(text: str, token: str = None, chat: str = None, disable_preview: bool =
                 try:
                     m = (r.json().get("result") or {})
                     c = m.get("chat") or {}
-                    print(f"  [telegram] delivered -> \"{_where(c)}\" "
-                          f"(chat {_mask(c.get('id'))}, type {c.get('type')}, "
-                          f"message_id {m.get('message_id')})")
+                    rec = {"where": _where(c), "type": c.get("type"), "chat": _mask(c.get("id")),
+                           "message_id": m.get("message_id"), "chars": len(text)}
+                    SENT.append(rec)
+                    print(f"  [telegram] delivered -> {rec['where']!r} (chat {rec['chat']}, "
+                          f"type {rec['type']}, message_id {rec['message_id']}, {rec['chars']} chars)")
                 except Exception:
-                    pass
+                    SENT.append({"where": "?", "type": "?", "chat": _mask(chat), "message_id": None,
+                                 "chars": len(text)})
                 return True
-            print(f"  [telegram] {r.status_code}: {r.text[:200]}")
+            reason = f"HTTP {r.status_code} {r.text[:160]}"
+            print(f"  [telegram] {reason}")
             time.sleep(2 * (a + 1))
         except Exception as e:
-            print(f"  [telegram] attempt {a+1} failed: {type(e).__name__} {e}")
+            reason = f"{type(e).__name__} {e}"
+            print(f"  [telegram] attempt {a+1} failed: {reason}")
             time.sleep(2 * (a + 1))
+    FAILED.append({"chat": _mask(chat), "reason": reason or "no response"})
+    print(f"  [telegram] !!! NOT DELIVERED after {retries} attempt(s) to chat {_mask(chat)}: "
+          f"{FAILED[-1]['reason']} - the run summary says so too, and the next run retries.")
     return False
 
 
