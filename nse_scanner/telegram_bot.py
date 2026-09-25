@@ -215,6 +215,33 @@ def status_card(s: dict) -> str:
     ])
 
 
+def board_line(items: list[dict], fresh: int, gated_n: int, data_through: str, when: str,
+               max_rows: int = 8) -> str:
+    """Compact hourly board: what is open, what triggered, what was filtered.  Deliberately short -
+    it goes out every hour, so it must be readable on a phone lock screen."""
+    pos = [s for s in items if s.get("status") == "IN TRADE"]
+    waits = [s for s in items if s.get("status") != "IN TRADE"]
+    L = [f"\U0001F551 <b>NSE board</b> · {when}",
+         f"{fresh} new trigger(s) · <b>{len(pos)}</b> open · {len(waits)} waiting · "
+         f"{gated_n} filtered out"]
+    if pos:
+        L.append("")
+        for s in pos[:max_rows]:
+            risk = (s.get("entry") or 0) - (s.get("stop") or 0)
+            r_now = (((s.get("last_close") or 0) - (s.get("entry") or 0)) / risk) if risk > 0 else None
+            L.append(f"`{_esc(s['symbol'])}` {s.get('last_close', '?')}"
+                     + (f"  {r_now:+.2f}R" if r_now is not None else "")
+                     + f"  ({s.get('entry_date', '')})")
+        if len(pos) > max_rows:
+            L.append(f"… +{len(pos) - max_rows} more")
+    if fresh and waits:
+        L.append("")
+        L.append("<b>waiting:</b> " + ", ".join(f"`{_esc(s['symbol'])}`" for s in waits[:6]))
+    L.append("")
+    L.append(f"<i>daily bars through {data_through} · next update in an hour</i>")
+    return "\n".join(x for x in L if x is not None)
+
+
 def digest(items: list[dict], kind: str = "post-close", gated: list[dict] = None,
            fresh: int = None, newly_closed: list[dict] = None,
            watch: list[dict] = None, data_through: str = None) -> str:
