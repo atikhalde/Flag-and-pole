@@ -224,8 +224,26 @@ def is_market_open(t: dt.datetime = None) -> bool:
 
 
 def is_confirmed_run(t: dt.datetime = None) -> bool:
+    """A run at/after 15:35 IST is the 'confirmed close' run.  NOTE this is a pure clock test, so a
+    run at 03:58 the next morning also satisfies it - that is fine for PRICING (the last session's
+    closes are final) but it must never be allowed to consume the NEW day's digest slot, which is
+    why the digest is keyed on session_date() and not on this."""
     t = t or now_ist()
     return t.hour * 60 + t.minute >= C.CONFIRMED_AFTER[0] * 60 + C.CONFIRMED_AFTER[1]
+
+
+def session_date(t: dt.datetime = None) -> dt.date:
+    """The trading session a run belongs to.  A run before the 09:15 IST open belongs to the
+    PREVIOUS session - otherwise an early-morning run stamps today's date and the real post-close
+    digest is skipped for the whole day (that is exactly what silenced 2026-09-25: a 03:58 IST run
+    marked the digest as sent before the market had even opened)."""
+    t = t or now_ist()
+    d = t.date()
+    if (t.hour, t.minute) < (C.MARKET_OPEN[0], C.MARKET_OPEN[1]):
+        d -= dt.timedelta(days=1)
+    while d.weekday() >= 5:              # walk back over the weekend; holidays are not modelled
+        d -= dt.timedelta(days=1)
+    return d
 
 
 def load_state(path: str = None) -> dict:

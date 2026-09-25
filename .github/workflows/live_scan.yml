@@ -64,7 +64,9 @@ jobs:
         continue-on-error: true
 
       - name: Validate the detector against the two source charts (warning only)
-        run: python3 -m nse_scanner.tests.test_exemplars
+        run: |
+          python3 -m nse_scanner.tests.test_exemplars
+          python3 -m nse_scanner.tests.test_digest_session
         continue-on-error: true
 
       - name: Run live scanner
