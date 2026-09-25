@@ -485,7 +485,22 @@ def main():
     ap.add_argument("--no-digest", action="store_true")
     ap.add_argument("--force-digest", action="store_true", help="send the digest even if one went out today")
     ap.add_argument("--test-telegram", action="store_true", help="send a one-line test message and exit")
+    ap.add_argument("--diag-telegram", action="store_true",
+                    help="report which bot/chat the alerts go to, then send a numbered ping and exit")
     args = ap.parse_args()
+    if args.diag_telegram:
+        # Answers "I get no alerts" from the log itself: which bot, which chat, which id, and a ping
+        # that also proves the send path.  Runs before the market guard and before any fetch.
+        who = TG.whoami()
+        me, ch = who.get("bot") or {}, who.get("chat") or {}
+        where = TG._where(ch) if ch else "<unknown>"
+        ok = TG.send(f"🔎 <b>NSE flag scanner - delivery check</b>\n"
+                     f"bot @{me.get('username', '?')} → chat <b>{TG._esc(where)}</b>\n"
+                     f"If you can read this, alerts are reaching this chat.\n"
+                     f"<i>{D.now_ist():%Y-%m-%d %H:%M} IST</i>")
+        print(f"[diag-telegram] bot @{me.get('username', '?')} | chat {where!r} "
+              f"(type {ch.get('type')}) | ping {'delivered' if ok else 'FAILED'}")
+        return 0 if ok else 1
     if args.test_telegram:
         ok = TG.send("✅ <b>NSE flag scanner</b> - test message. The Telegram wiring works. "
                      "You will get an alert here the moment a stock triggers.")
