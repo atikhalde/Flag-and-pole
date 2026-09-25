@@ -386,7 +386,12 @@ def run(args) -> int:
         _dig = f"skipped (session {session} already covered)"
     else:
         _dig = "failed (Telegram rejected it - retrying next run)"
-    print(f"[done] alerts sent {sent} | digest {_dig} "
+    _to = f" -> {TG.SENT[0]['where']!r} ({TG.SENT[0]['chat']})" if TG.SENT else ""
+    if sent or digest_sent:
+        print(f"[delivered]{_to}")
+    if TG.FAILED and not (sent or digest_sent):
+        print(f"[delivered] NOTHING - Telegram rejected the send: {TG.FAILED[0]['reason']}")
+    print(f"[done] alerts sent {sent}{_to} | digest {_dig} "
           f"| {len(in_trade)} position(s) open | state saved")
 
     _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, digest_sent, mcap_map,
@@ -462,6 +467,25 @@ def _run_summary(results, buys, in_trade, waiting, gated, regime, mode, sent, di
           for r in waiting], ["symbol", "stage", "rail", "shakeout low", "% to rail"])
     _tbl(f"Filtered out by the quality gates ({len(gated)})",
          [[f"`{r['symbol']}`", r.get("skip_reason")] for r in gated], ["symbol", "why it was skipped"])
+    # ---- Telegram delivery: the run page must say WHERE the messages went, so "no alert"
+    # is never answered by guesswork again.
+    L.append("")
+    L.append("### Telegram delivery")
+    if TG.SENT:
+        first = TG.SENT[0]
+        ids = ", ".join(str(r.get("message_id")) for r in TG.SENT)
+        L.append(f"- **{len(TG.SENT)} message(s) delivered** to chat **{first['where']}** "
+                 f"({first.get('type')}, id `{first.get('chat')}`) — message ids {ids}")
+        L.append(f"- the bot is **@{TG.BOT_USERNAME or 'Flagandpole_bot'}** — if that chat is not where you "
+                 f"read Telegram, send the bot a message and re-run with `diag_telegram: true`")
+    elif TG.FAILED:
+        f0 = TG.FAILED[0]
+        L.append(f"- **NOTHING WAS DELIVERED — Telegram rejected the send to `{f0['chat']}`: "
+                 f"{f0['reason']}**")
+        L.append("- check `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` (Settings → Secrets → Actions); "
+                 "the exact error is above. The next run retries automatically.")
+    else:
+        L.append("- nothing sent this run (no new trigger, and this is not the post-close digest run)")
     L.append("---")
     L.append("*No fresh signal is normal:* the trigger fires on the exact day of the first bullish candle after a "
              "shakeout. With the `strict` profile the whole universe produces roughly one signal every three weeks "
